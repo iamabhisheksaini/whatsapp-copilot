@@ -85,6 +85,8 @@ services:
       - CALENDAR_ID=${CALENDAR_ID:-primary}
       - WHATSAPP_PHONE_ID=${WHATSAPP_PHONE_ID:-}
       - WHATSAPP_VERIFY_TOKEN=${WHATSAPP_VERIFY_TOKEN:-}
+      # Where the error channel sends failure alerts.
+      - OPERATOR_WHATSAPP_NUMBER=${OPERATOR_WHATSAPP_NUMBER:-}
       - AGENT_A_URL=${AGENT_A_URL:-http://agentA:8001}
       - AGENT_B_URL=${AGENT_B_URL:-http://agentB:8000}
     volumes:

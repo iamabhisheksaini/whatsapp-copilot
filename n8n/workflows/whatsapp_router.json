@@ -1,0 +1,2033 @@
+{
+  "name": "WhatsApp Router",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "whatsapp-router",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "b86e6a5c-5d1f-5896-94c7-6459ac7ec194",
+      "name": "Meta Verify",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -200,
+        60
+      ],
+      "webhookId": "318e4439-e2ef-4122-a95f-814142007a73"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Meta's one-time subscription handshake: echo hub.challenge back\n// as plain text when the verify token matches.\nconst q = $input.first().json.query || {};\nif (q['hub.verify_token'] !== $env.WHATSAPP_VERIFY_TOKEN) {\n  return [{ json: { status: 403, body: 'forbidden' } }];\n}\nreturn [{ json: { status: 200, body: q['hub.challenge'] } }];"
+      },
+      "id": "3ab6337f-5b47-5b5c-9f06-ad328ad304cc",
+      "name": "Verify Handler",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        20,
+        60
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ $json.body }}",
+        "options": {}
+      },
+      "id": "98fb271e-bdc9-577d-9cc3-c971efbe8f3b",
+      "name": "Respond Verify",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        240,
+        60
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "whatsapp-router",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "48d55e22-9675-5df7-80f8-9919ffbe7a9b",
+      "name": "WhatsApp Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -200,
+        420
+      ],
+      "webhookId": "67287088-45c0-48cd-9d32-0d60a1d67e99"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Flatten Meta's nested webhook payload into one predictable object.\n// Also accepts a flat {message, from} body so the flow can be tested with curl.\nconst body = $input.first().json.body ?? $input.first().json;\n\nlet text = '', from = '', messageId = '', mediaId = '', mimeType = '', filename = '';\n\ntry {\n  const value = body.entry[0].changes[0].value;\n  const msg = (value.messages || [])[0];\n  if (msg) {\n    from = msg.from || '';\n    messageId = msg.id || '';\n    if (msg.type === 'text') {\n      text = msg.text?.body || '';\n    } else if (['document', 'image', 'audio', 'video'].includes(msg.type)) {\n      const media = msg[msg.type] || {};\n      mediaId = media.id || '';\n      mimeType = media.mime_type || '';\n      filename = media.filename || `${msg.type}-${mediaId}`;\n      text = media.caption || '';\n    }\n  }\n} catch (e) {\n  text = body.message || body.text || '';\n  from = body.from || '';\n  messageId = body.messageId || '';\n}\n\n// Meta retries deliveries; the message id is the natural idempotency key, so\n// downstream Sheets writes match on it instead of blindly appending.\nconst requestId = messageId || `wa-${Date.now()}`;\n\nreturn [{\n  json: {\n    from, text, messageId, requestId,\n    mediaId, mimeType, filename,\n    hasAttachment: Boolean(mediaId),\n    receivedAt: new Date().toISOString(),\n  }\n}];"
+      },
+      "id": "1c4d67b2-7f61-508f-8f56-9d4fd297177f",
+      "name": "Normalize Inbound",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        20,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "has-attachment",
+              "leftValue": "={{ $json.hasAttachment }}",
+              "rightValue": "true",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "51ff5a7f-a9ce-5457-9ba9-3c544fe4f300",
+      "name": "Has Attachment?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        240,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://graph.facebook.com/v18.0/{{ $json.mediaId }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "facebookGraphApi",
+        "options": {}
+      },
+      "id": "829c62a0-45cf-5fdb-9391-0b5bee593eb6",
+      "name": "Get Media URL",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        460,
+        200
+      ],
+      "retryOnFail": true,
+      "maxTries": 3
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.url }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "facebookGraphApi",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "data"
+            }
+          }
+        }
+      },
+      "id": "bedc1660-ac4c-5f02-92a8-3e9986e2cbbe",
+      "name": "Download Media",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        680,
+        200
+      ],
+      "retryOnFail": true,
+      "maxTries": 3
+    },
+    {
+      "parameters": {
+        "name": "={{ $('Normalize Inbound').first().json.filename }}",
+        "driveId": {
+          "__rl": true,
+          "value": "My Drive",
+          "mode": "list"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "={{ $env.DRIVE_KNOWLEDGEBASE_FOLDER_ID }}",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "id": "136490e3-1fd6-5382-b20f-f8b4dcf3294f",
+      "name": "Upload to Drive",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        900,
+        200
+      ],
+      "retryOnFail": true,
+      "maxTries": 3
+    },
+    {
+      "parameters": {
+        "operation": "pdf",
+        "binaryPropertyName": "data",
+        "options": {}
+      },
+      "id": "75253839-a4ab-56af-a885-8a1bbd5b351f",
+      "name": "Extract Text",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [
+        1120,
+        200
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.AGENT_A_URL }}/agentA/ingest",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Request-Id",
+              "value": "={{ $('Normalize Inbound').first().json.requestId }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ filename: $('Normalize Inbound').first().json.filename, driveFileId: $('Upload to Drive').first().json.id, text: $json.text || '', metadata: { source: 'whatsapp', from: $('Normalize Inbound').first().json.from } }) }}",
+        "options": {
+          "timeout": 120000,
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "1fe3803f-1190-5c8f-8f10-455efe284c76",
+      "name": "Agent A — Ingest",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1340,
+        200
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "fields": {
+          "values": [
+            {
+              "name": "Timestamp",
+              "type": "stringValue",
+              "stringValue": "={{ $now.toISO() }}"
+            },
+            {
+              "name": "User",
+              "type": "stringValue",
+              "stringValue": "={{ $('Normalize Inbound').first().json.from }}"
+            },
+            {
+              "name": "Intent",
+              "type": "stringValue",
+              "stringValue": "file_ingest"
+            },
+            {
+              "name": "Input",
+              "type": "stringValue",
+              "stringValue": "={{ $('Normalize Inbound').first().json.filename }}"
+            },
+            {
+              "name": "Output",
+              "type": "stringValue",
+              "stringValue": "={{ $json.chunks ? $json.chunks + ' chunks indexed' : 'ingest failed' }}"
+            },
+            {
+              "name": "Confidence",
+              "type": "stringValue",
+              "stringValue": ""
+            },
+            {
+              "name": "Citations",
+              "type": "stringValue",
+              "stringValue": "={{ 'https://drive.google.com/file/d/' + $('Upload to Drive').first().json.id }}"
+            },
+            {
+              "name": "MessageId",
+              "type": "stringValue",
+              "stringValue": "={{ $('Normalize Inbound').first().json.messageId }}"
+            },
+            {
+              "name": "Error",
+              "type": "stringValue",
+              "stringValue": "={{ $json.error || '' }}"
+            }
+          ]
+        },
+        "includeOtherFields": false,
+        "options": {}
+      },
+      "id": "9089fa54-013b-581e-9a27-ca4b8bfa32c7",
+      "name": "Conversations Row (Ingest)",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1560,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "sheet",
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $env.SHEET_CONVERSATIONS_ID }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Conversations",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [
+            "MessageId"
+          ],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "8dd53329-f0d4-56ec-86bf-675e3e27af18",
+      "name": "Log Conversation (Ingest)",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1780,
+        200
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v18.0/{{ $env.WHATSAPP_PHONE_ID }}/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "facebookGraphApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', to: $('Normalize Inbound').first().json.from, type: 'text', text: { body: 'Got it — I added *' + $('Normalize Inbound').first().json.filename + '* to the knowledge base.' } }) }}",
+        "options": {}
+      },
+      "id": "33f3d08e-f34f-5d5f-84db-3d54d193b556",
+      "name": "Reply — File Added",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2000,
+        200
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "4b2fff3e-9878-55be-a6c7-2c415462302d",
+      "name": "Respond — Ingest",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        2220,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.AGENT_B_URL }}/classify",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Request-Id",
+              "value": "={{ $('Normalize Inbound').first().json.requestId }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ text: $json.text }) }}",
+        "options": {
+          "timeout": 120000,
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "7b50bb26-2c74-53b3-8d42-2e323d3cd759",
+      "name": "Classify Intent",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        460,
+        640
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "intent-knowledge_qa",
+                    "leftValue": "={{ $json.intent }}",
+                    "rightValue": "knowledge_qa",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "knowledge_qa"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "intent-lead_capture",
+                    "leftValue": "={{ $json.intent }}",
+                    "rightValue": "lead_capture",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "lead_capture"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "intent-proposal_request",
+                    "leftValue": "={{ $json.intent }}",
+                    "rightValue": "proposal_request",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "proposal_request"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "intent-next_step",
+                    "leftValue": "={{ $json.intent }}",
+                    "rightValue": "next_step",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "next_step"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "intent-status_update",
+                    "leftValue": "={{ $json.intent }}",
+                    "rightValue": "status_update",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "status_update"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra",
+          "renameFallbackOutput": "other"
+        }
+      },
+      "id": "370b3ae2-b76b-5a26-8f93-c077c64b8165",
+      "name": "Route by Intent",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        680,
+        640
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.AGENT_A_URL }}/agentA/ask",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Request-Id",
+              "value": "={{ $('Normalize Inbound').first().json.requestId }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ userId: $('Normalize Inbound').first().json.from, text: $('Normalize Inbound').first().json.text }) }}",
+        "options": {
+          "timeout": 120000,
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "cb39c85a-4531-5463-9ae8-abcc8fd2bb2c",
+      "name": "Agent A — Ask",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        900,
+        140
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "fields": {
+          "values": [
+            {
+              "name": "Timestamp",
+              "type": "stringValue",
+              "stringValue": "={{ $now.toISO() }}"
+            },
+            {
+              "name": "User",
+              "type": "stringValue",
+              "stringValue": "={{ $('Normalize Inbound').first().json.from }}"
+            },
+            {
+              "name": "Intent",
+              "type": "stringValue",
+              "stringValue": "knowledge_qa"
+            },
+            {
+              "name": "Input",
+              "type": "stringValue",
+              "stringValue": "={{ $('Normalize Inbound').first().json.text }}"
+            },
+            {
+              "name": "Output",
+              "type": "stringValue",
+              "stringValue": "={{ $json.answer || '' }}"
+            },
+            {
+              "name": "Confidence",
+              "type": "stringValue",
+              "stringValue": "={{ $json.confidence }}"
+            },
+            {
+              "name": "Citations",
+              "type": "stringValue",
+              "stringValue": "={{ ($json.citations || []).map(c => c.title).join(', ') }}"
+            },
+            {
+              "name": "MessageId",
+              "type": "stringValue",
+              "stringValue": "={{ $('Normalize Inbound').first().json.messageId }}"
+            },
+            {
+              "name": "Error",
+              "type": "stringValue",
+              "stringValue": "={{ $json.error || '' }}"
+            }
+          ]
+        },
+        "includeOtherFields": false,
+        "options": {}
+      },
+      "id": "cfbd7777-1b50-55b0-92d9-80766cd1535f",
+      "name": "Conversations Row (QA)",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1120,
+        140
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "sheet",
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $env.SHEET_CONVERSATIONS_ID }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Conversations",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [
+            "MessageId"
+          ],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "1fa55ec4-fe0d-5c0c-8eac-67cdc4375b6d",
+      "name": "Log Conversation (QA)",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1340,
+        140
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v18.0/{{ $env.WHATSAPP_PHONE_ID }}/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "facebookGraphApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', to: $('Normalize Inbound').first().json.from, type: 'text', text: { body: $('Agent A — Ask').first().json.answer + (($('Agent A — Ask').first().json.citations || []).length ? '\\n\\n_Sources: ' + $('Agent A — Ask').first().json.citations.map(c => c.title).join(', ') + '_' : '') } }) }}",
+        "options": {}
+      },
+      "id": "5e7db4fe-00c8-580a-8f40-999134330524",
+      "name": "Reply — Answer",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1560,
+        140
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "940e551c-15ac-5846-8033-b686cb65a317",
+      "name": "Respond — QA",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1780,
+        140
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.AGENT_B_URL }}/agentB/newlead",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Request-Id",
+              "value": "={{ $('Normalize Inbound').first().json.requestId }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ raw: $('Normalize Inbound').first().json.text }) }}",
+        "options": {
+          "timeout": 120000,
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "4c032c91-b937-5dd6-9727-212871ee1b95",
+      "name": "Agent B — New Lead",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        900,
+        340
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "fields": {
+          "values": [
+            {
+              "name": "Timestamp",
+              "type": "stringValue",
+              "stringValue": "={{ $now.toISO() }}"
+            },
+            {
+              "name": "LeadId",
+              "type": "stringValue",
+              "stringValue": "={{ ($json.company || 'unknown').toLowerCase().replace(/[^a-z0-9]+/g,'-') }}"
+            },
+            {
+              "name": "Name",
+              "type": "stringValue",
+              "stringValue": "={{ $json.name || '' }}"
+            },
+            {
+              "name": "Company",
+              "type": "stringValue",
+              "stringValue": "={{ $json.company || '' }}"
+            },
+            {
+              "name": "Intent",
+              "type": "stringValue",
+              "stringValue": "={{ $json.intent || '' }}"
+            },
+            {
+              "name": "Budget",
+              "type": "stringValue",
+              "stringValue": "={{ $json.budget || '' }}"
+            },
+            {
+              "name": "Stage",
+              "type": "stringValue",
+              "stringValue": "New"
+            },
+            {
+              "name": "Owner",
+              "type": "stringValue",
+              "stringValue": "={{ $('Normalize Inbound').first().json.from }}"
+            },
+            {
+              "name": "NextStepDate",
+              "type": "stringValue",
+              "stringValue": ""
+            },
+            {
+              "name": "Domain",
+              "type": "stringValue",
+              "stringValue": "={{ $json.normalizedCompanyDomain || '' }}"
+            },
+            {
+              "name": "QualityScore",
+              "type": "stringValue",
+              "stringValue": "={{ $json.qualityScore }}"
+            },
+            {
+              "name": "Notes",
+              "type": "stringValue",
+              "stringValue": "={{ $json.notes || '' }}"
+            }
+          ]
+        },
+        "includeOtherFields": false,
+        "options": {}
+      },
+      "id": "1a4f7a02-fbf5-58bf-9eaf-412738da7754",
+      "name": "CRM Row (Lead)",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1120,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "sheet",
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $env.SHEET_CRM_ID }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "CRM",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [
+            "LeadId"
+          ],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "160ea0a0-518e-5b0c-b41b-f75a92092e9f",
+      "name": "Upsert CRM (Lead)",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1340,
+        340
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v18.0/{{ $env.WHATSAPP_PHONE_ID }}/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "facebookGraphApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', to: $('Normalize Inbound').first().json.from, type: 'text', text: { body: 'Captured: *' + ($('Agent B — New Lead').first().json.name || '?') + '* at *' + ($('Agent B — New Lead').first().json.company || '?') + '*\\nBudget: ' + ($('Agent B — New Lead').first().json.budget || 'not stated') + '\\nTimeline: ' + ($('Agent B — New Lead').first().json.timeline || 'not stated') + (($('Agent B — New Lead').first().json.missingFields || []).length ? '\\n\\nStill missing: ' + $('Agent B — New Lead').first().json.missingFields.join(', ') : '') } }) }}",
+        "options": {}
+      },
+      "id": "673e8be2-251c-5b93-9135-84e8e4536c0c",
+      "name": "Reply — Lead",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1560,
+        340
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "5f0afbf0-5fe4-534e-abf8-ee709e806853",
+      "name": "Respond — Lead",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1780,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.AGENT_B_URL }}/agentB/proposal-copy",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Request-Id",
+              "value": "={{ $('Normalize Inbound').first().json.requestId }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ lead: { company: ($json.entities && $json.entities.company) || '', name: ($json.entities && $json.entities.person) || '', intent: $('Normalize Inbound').first().json.text } }) }}",
+        "options": {
+          "timeout": 120000,
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "d402eb28-6177-561f-acd2-18dbdaa9cbd3",
+      "name": "Agent B — Proposal Copy",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        900,
+        540
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "operation": "copy",
+        "fileId": {
+          "__rl": true,
+          "value": "={{ $env.DRIVE_PROPOSAL_TEMPLATE_ID }}",
+          "mode": "id"
+        },
+        "name": "={{ $json.title }}",
+        "options": {
+          "parents": [
+            "={{ $env.DRIVE_PROPOSALS_FOLDER_ID }}"
+          ]
+        }
+      },
+      "id": "a06c530d-b56b-5712-b9ab-df2c0ed7837f",
+      "name": "Copy Proposal Template",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        1120,
+        540
+      ],
+      "retryOnFail": true,
+      "maxTries": 3
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://docs.googleapis.com/v1/documents/{{ $json.id }}:batchUpdate",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDocsOAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ requests: [{ replaceAllText: { containsText: { text: '{{TITLE}}', matchCase: true }, replaceText: $('Agent B — Proposal Copy').first().json.title } },{ replaceAllText: { containsText: { text: '{{SUMMARY}}', matchCase: true }, replaceText: $('Agent B — Proposal Copy').first().json.summaryBlurb } },{ replaceAllText: { containsText: { text: '{{BULLETS}}', matchCase: true }, replaceText: ($('Agent B — Proposal Copy').first().json.bulletPoints || []).map(b => '• ' + b).join('\\n') } }] }) }}",
+        "options": {}
+      },
+      "id": "731a4066-815e-52a9-93e6-b6ecbc8ccb82",
+      "name": "Merge Proposal Fields",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1340,
+        540
+      ],
+      "retryOnFail": true,
+      "maxTries": 3
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "fields": {
+          "values": [
+            {
+              "name": "LeadId",
+              "type": "stringValue",
+              "stringValue": "={{ (($('Agent B — Proposal Copy').first().json.company) || 'unknown').toLowerCase().replace(/[^a-z0-9]+/g,'-') }}"
+            },
+            {
+              "name": "Links",
+              "type": "stringValue",
+              "stringValue": "={{ 'https://docs.google.com/document/d/' + $('Copy Proposal Template').first().json.id + '/export?format=pdf' }}"
+            },
+            {
+              "name": "Stage",
+              "type": "stringValue",
+              "stringValue": "Proposal sent"
+            }
+          ]
+        },
+        "includeOtherFields": false,
+        "options": {}
+      },
+      "id": "767c3648-f59d-56ca-b7db-0ed20d256260",
+      "name": "CRM Row (Proposal)",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1560,
+        540
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "sheet",
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $env.SHEET_CRM_ID }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "CRM",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [
+            "LeadId"
+          ],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "246a51e8-0bae-57b3-aaf9-0e0c7f20beb7",
+      "name": "Update CRM (Proposal)",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1780,
+        540
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v18.0/{{ $env.WHATSAPP_PHONE_ID }}/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "facebookGraphApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', to: $('Normalize Inbound').first().json.from, type: 'text', text: { body: 'Proposal ready: *' + $('Agent B — Proposal Copy').first().json.title + '*\\n' + 'https://docs.google.com/document/d/' + $('Copy Proposal Template').first().json.id + '/export?format=pdf' } }) }}",
+        "options": {}
+      },
+      "id": "d85a8c09-5b46-5760-87a4-c0aa5f7ecb1b",
+      "name": "Reply — Proposal",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2000,
+        540
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "6e624e6c-4389-5b07-bd06-a41d9b14818a",
+      "name": "Respond — Proposal",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        2220,
+        540
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "ctx-knowledge",
+              "leftValue": "={{ $json.context }}",
+              "rightValue": "knowledge",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "812466c0-b981-5a60-82a8-1718575c20be",
+      "name": "Knowledge Context?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        900,
+        760
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.AGENT_A_URL }}/agentA/followup-parse",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Request-Id",
+              "value": "={{ $('Normalize Inbound').first().json.requestId }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ text: $('Normalize Inbound').first().json.text }) }}",
+        "options": {
+          "timeout": 120000,
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "87d709cb-57a4-5c2c-82cf-26545fede273",
+      "name": "Agent A — Followup Parse",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1120,
+        680
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.AGENT_B_URL }}/agentB/nextstep-parse",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Request-Id",
+              "value": "={{ $('Normalize Inbound').first().json.requestId }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ text: $('Normalize Inbound').first().json.text }) }}",
+        "options": {
+          "timeout": 120000,
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "f309e17f-b6d1-5f51-baf5-01004bffad04",
+      "name": "Agent B — Nextstep Parse",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1120,
+        840
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "resource": "event",
+        "operation": "create",
+        "calendar": {
+          "__rl": true,
+          "value": "={{ $env.CALENDAR_ID }}",
+          "mode": "id"
+        },
+        "start": "={{ $json.startISO }}",
+        "end": "={{ $json.endISO }}",
+        "additionalFields": {
+          "summary": "={{ $json.title }}",
+          "description": "=Created from WhatsApp by {{ $('Normalize Inbound').first().json.from }}\nMessage: {{ $('Normalize Inbound').first().json.text }}\nrequestId: {{ $('Normalize Inbound').first().json.requestId }}"
+        }
+      },
+      "id": "a06806b0-0133-56c3-9c7c-a004ce2dead1",
+      "name": "Create Calendar Event",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        1340,
+        760
+      ],
+      "retryOnFail": true,
+      "maxTries": 3
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "fields": {
+          "values": [
+            {
+              "name": "LeadId",
+              "type": "stringValue",
+              "stringValue": "={{ (($('Classify Intent').first().json.entities || {}).company || 'unknown').toLowerCase().replace(/[^a-z0-9]+/g,'-') }}"
+            },
+            {
+              "name": "NextStepDate",
+              "type": "stringValue",
+              "stringValue": "={{ $('Create Calendar Event').first().json.start.dateTime || $('Create Calendar Event').first().json.start }}"
+            }
+          ]
+        },
+        "includeOtherFields": false,
+        "options": {}
+      },
+      "id": "d0df81b1-deee-529b-944e-bb15ee8fc11f",
+      "name": "CRM Row (Next Step)",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1560,
+        760
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "sheet",
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $env.SHEET_CRM_ID }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "CRM",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [
+            "LeadId"
+          ],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "ddbcadd3-6a3a-5a31-ace5-36c4007add79",
+      "name": "Update CRM (Next Step)",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1780,
+        760
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v18.0/{{ $env.WHATSAPP_PHONE_ID }}/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "facebookGraphApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', to: $('Normalize Inbound').first().json.from, type: 'text', text: { body: 'Scheduled *' + $('Create Calendar Event').first().json.summary + '* for ' + ($('Create Calendar Event').first().json.start.dateTime || $('Create Calendar Event').first().json.start) + '\\n' + ($('Create Calendar Event').first().json.htmlLink || '') } }) }}",
+        "options": {}
+      },
+      "id": "0b7a2286-1b61-56ce-b94c-afe0cba62ed8",
+      "name": "Reply — Scheduled",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2000,
+        760
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "f04aefea-3869-5d73-8c4c-fe3545e6bacf",
+      "name": "Respond — Next Step",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        2220,
+        760
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.AGENT_B_URL }}/agentB/status-classify",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Request-Id",
+              "value": "={{ $('Normalize Inbound').first().json.requestId }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ label: (($json.entities || {}).statusLabel) || 'Lost', reasonText: $('Normalize Inbound').first().json.text }) }}",
+        "options": {
+          "timeout": 120000,
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "1c797110-a944-5532-a5a4-f1d72093884e",
+      "name": "Agent B — Status Classify",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        900,
+        960
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "fields": {
+          "values": [
+            {
+              "name": "LeadId",
+              "type": "stringValue",
+              "stringValue": "={{ (($('Classify Intent').first().json.entities || {}).company || 'unknown').toLowerCase().replace(/[^a-z0-9]+/g,'-') }}"
+            },
+            {
+              "name": "Stage",
+              "type": "stringValue",
+              "stringValue": "={{ $json.label }}"
+            },
+            {
+              "name": "Notes",
+              "type": "stringValue",
+              "stringValue": "={{ '[' + $json.reasonCategory + '] ' + $json.reasonSummary }}"
+            }
+          ]
+        },
+        "includeOtherFields": false,
+        "options": {}
+      },
+      "id": "9357b09d-feb7-5ac5-8b0d-952020bef814",
+      "name": "CRM Row (Status)",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1120,
+        960
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "sheet",
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $env.SHEET_CRM_ID }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "CRM",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [
+            "LeadId"
+          ],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "af88fb24-1b28-58e4-8373-609d4d648dab",
+      "name": "Update CRM (Status)",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1340,
+        960
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v18.0/{{ $env.WHATSAPP_PHONE_ID }}/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "facebookGraphApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', to: $('Normalize Inbound').first().json.from, type: 'text', text: { body: 'Updated to *' + $('Agent B — Status Classify').first().json.label + '* — ' + $('Agent B — Status Classify').first().json.reasonSummary } }) }}",
+        "options": {}
+      },
+      "id": "fd185c7a-5d0d-5210-9235-045e529e4833",
+      "name": "Reply — Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1560,
+        960
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "81a499dd-63db-57ca-8855-9ba6fdc95202",
+      "name": "Respond — Status",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1780,
+        960
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v18.0/{{ $env.WHATSAPP_PHONE_ID }}/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "facebookGraphApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', to: $('Normalize Inbound').first().json.from, type: 'text', text: { body: \"I can answer questions about our documents, capture leads, draft \" + \"proposals, schedule calls and update deal status. What do you need?\" } }) }}",
+        "options": {}
+      },
+      "id": "a7017eaf-5570-545f-b67a-ac0192457b65",
+      "name": "Reply — Fallback",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        900,
+        1140
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "025ac018-4b36-5eed-9e78-738a8d8cb9e1",
+      "name": "Respond — Fallback",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1120,
+        1140
+      ]
+    }
+  ],
+  "connections": {
+    "Meta Verify": {
+      "main": [
+        [
+          {
+            "node": "Verify Handler",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify Handler": {
+      "main": [
+        [
+          {
+            "node": "Respond Verify",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "WhatsApp Webhook": {
+      "main": [
+        [
+          {
+            "node": "Normalize Inbound",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Inbound": {
+      "main": [
+        [
+          {
+            "node": "Has Attachment?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Attachment?": {
+      "main": [
+        [
+          {
+            "node": "Get Media URL",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Classify Intent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Media URL": {
+      "main": [
+        [
+          {
+            "node": "Download Media",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Media": {
+      "main": [
+        [
+          {
+            "node": "Upload to Drive",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload to Drive": {
+      "main": [
+        [
+          {
+            "node": "Extract Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Text": {
+      "main": [
+        [
+          {
+            "node": "Agent A — Ingest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agent A — Ingest": {
+      "main": [
+        [
+          {
+            "node": "Conversations Row (Ingest)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Conversations Row (Ingest)": {
+      "main": [
+        [
+          {
+            "node": "Log Conversation (Ingest)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Conversation (Ingest)": {
+      "main": [
+        [
+          {
+            "node": "Reply — File Added",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reply — File Added": {
+      "main": [
+        [
+          {
+            "node": "Respond — Ingest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Classify Intent": {
+      "main": [
+        [
+          {
+            "node": "Route by Intent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route by Intent": {
+      "main": [
+        [
+          {
+            "node": "Agent A — Ask",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Agent B — New Lead",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Agent B — Proposal Copy",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Knowledge Context?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Agent B — Status Classify",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reply — Fallback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agent A — Ask": {
+      "main": [
+        [
+          {
+            "node": "Conversations Row (QA)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Conversations Row (QA)": {
+      "main": [
+        [
+          {
+            "node": "Log Conversation (QA)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Conversation (QA)": {
+      "main": [
+        [
+          {
+            "node": "Reply — Answer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reply — Answer": {
+      "main": [
+        [
+          {
+            "node": "Respond — QA",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agent B — New Lead": {
+      "main": [
+        [
+          {
+            "node": "CRM Row (Lead)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CRM Row (Lead)": {
+      "main": [
+        [
+          {
+            "node": "Upsert CRM (Lead)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert CRM (Lead)": {
+      "main": [
+        [
+          {
+            "node": "Reply — Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reply — Lead": {
+      "main": [
+        [
+          {
+            "node": "Respond — Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agent B — Proposal Copy": {
+      "main": [
+        [
+          {
+            "node": "Copy Proposal Template",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Copy Proposal Template": {
+      "main": [
+        [
+          {
+            "node": "Merge Proposal Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Proposal Fields": {
+      "main": [
+        [
+          {
+            "node": "CRM Row (Proposal)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CRM Row (Proposal)": {
+      "main": [
+        [
+          {
+            "node": "Update CRM (Proposal)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update CRM (Proposal)": {
+      "main": [
+        [
+          {
+            "node": "Reply — Proposal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reply — Proposal": {
+      "main": [
+        [
+          {
+            "node": "Respond — Proposal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Knowledge Context?": {
+      "main": [
+        [
+          {
+            "node": "Agent A — Followup Parse",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Agent B — Nextstep Parse",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agent A — Followup Parse": {
+      "main": [
+        [
+          {
+            "node": "Create Calendar Event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agent B — Nextstep Parse": {
+      "main": [
+        [
+          {
+            "node": "Create Calendar Event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Calendar Event": {
+      "main": [
+        [
+          {
+            "node": "CRM Row (Next Step)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CRM Row (Next Step)": {
+      "main": [
+        [
+          {
+            "node": "Update CRM (Next Step)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update CRM (Next Step)": {
+      "main": [
+        [
+          {
+            "node": "Reply — Scheduled",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reply — Scheduled": {
+      "main": [
+        [
+          {
+            "node": "Respond — Next Step",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agent B — Status Classify": {
+      "main": [
+        [
+          {
+            "node": "CRM Row (Status)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CRM Row (Status)": {
+      "main": [
+        [
+          {
+            "node": "Update CRM (Status)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update CRM (Status)": {
+      "main": [
+        [
+          {
+            "node": "Reply — Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reply — Status": {
+      "main": [
+        [
+          {
+            "node": "Respond — Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reply — Fallback": {
+      "main": [
+        [
+          {
+            "node": "Respond — Fallback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "={{ $env.ERROR_WORKFLOW_ID }}"
+  },
+  "pinData": {}
+}

@@ -1,0 +1,92 @@
+name: whatsapp-copilot
+
+services:
+  agentA:
+    build:
+      # Context is ./agents so the image can include the shared/ package.
+      context: ./agents
+      dockerfile: agentA_knowledge/Dockerfile
+    image: whatsapp-copilot-agenta
+    container_name: agentA
+    ports:
+      - "8001:8001"
+    env_file:
+      - .env
+    environment:
+      - CHROMA_HOST=chroma
+      - CHROMA_PORT=8000
+    volumes:
+      # Live-reload mounts for development. `shared` is mounted separately
+      # because the first mount would otherwise hide it.
+      - ./agents/agentA_knowledge:/app
+      - ./agents/shared:/app/shared
+    depends_on:
+      chroma:
+        condition: service_started
+    restart: unless-stopped
+
+  agentB:
+    build:
+      context: ./agents
+      dockerfile: agentB_dealflow/Dockerfile
+    image: whatsapp-copilot-agentb
+    container_name: agentB
+    ports:
+      - "8002:8000"
+    env_file:
+      - .env
+    volumes:
+      - ./agents/agentB_dealflow:/app
+      - ./agents/shared:/app/shared
+    restart: unless-stopped
+
+  chroma:
+    image: chromadb/chroma:latest
+    container_name: chroma
+    ports:
+      - "8003:8000"
+    environment:
+      - IS_PERSISTENT=TRUE
+      - ANONYMIZED_TELEMETRY=FALSE
+    volumes:
+      # The server writes to /data. Mounting anywhere else (e.g. /chroma/data)
+      # silently keeps the index in the container layer and loses it on `down`.
+      - ./data/chroma:/data
+    restart: unless-stopped
+
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: n8n
+    ports:
+      - "5678:5678"
+    environment:
+      - N8N_BASIC_AUTH_ACTIVE=false
+      - GENERIC_TIMEZONE=${GENERIC_TIMEZONE:-Asia/Kolkata}
+      - N8N_RUNNERS_ENABLED=true
+      - DB_SQLITE_POOL_SIZE=5
+      - N8N_DIAGNOSTICS_ENABLED=false
+      # Workflows read ids via {{ $env.NAME }}; n8n will default this to
+      # true in a future release, which would break every expression below.
+      - N8N_BLOCK_ENV_ACCESS_IN_NODE=false
+      - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=true
+      # Set in .env to the public https URL (e.g. an ngrok tunnel) that Meta
+      # posts WhatsApp webhooks to.
+      - WEBHOOK_URL=${WEBHOOK_URL:-http://localhost:5678/}
+      # Workflows read these with {{ $env.NAME }} so no ids or tokens are baked
+      # into the committed workflow JSON.
+      - DRIVE_KNOWLEDGEBASE_FOLDER_ID=${DRIVE_KNOWLEDGEBASE_FOLDER_ID:-}
+      - DRIVE_PROPOSALS_FOLDER_ID=${DRIVE_PROPOSALS_FOLDER_ID:-}
+      - DRIVE_PROPOSAL_TEMPLATE_ID=${DRIVE_PROPOSAL_TEMPLATE_ID:-}
+      - SHEET_CONVERSATIONS_ID=${SHEET_CONVERSATIONS_ID:-}
+      - SHEET_CRM_ID=${SHEET_CRM_ID:-}
+      - CALENDAR_ID=${CALENDAR_ID:-primary}
+      - WHATSAPP_PHONE_ID=${WHATSAPP_PHONE_ID:-}
+      - WHATSAPP_VERIFY_TOKEN=${WHATSAPP_VERIFY_TOKEN:-}
+      - AGENT_A_URL=${AGENT_A_URL:-http://agentA:8001}
+      - AGENT_B_URL=${AGENT_B_URL:-http://agentB:8000}
+    volumes:
+      - ./n8n_data:/home/node/.n8n
+    depends_on:
+      - agentA
+      - agentB
+    restart: unless-stopped

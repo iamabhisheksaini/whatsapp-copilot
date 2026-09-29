@@ -1,0 +1,22 @@
+# Secrets — never commit. Use env.sample as the template.
+.env
+.env.*
+!env.sample
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Runtime state
+data/chroma/
+n8n_data/
+infra/n8n_data/
+infra/.venv/
+
+# OS
+.DS_Store

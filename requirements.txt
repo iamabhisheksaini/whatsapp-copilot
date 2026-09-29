@@ -1,0 +1,13 @@
+# Local development and test dependencies.
+#
+# The services themselves install agents/requirements.txt inside their images;
+# this file is for running the test suite on the host.
+#
+#   python3 -m venv .venv
+#   .venv/bin/pip install -r requirements.txt
+#   .venv/bin/python -m pytest
+
+-r agents/requirements.txt
+
+pytest==8.4.2
+httpx==0.28.1

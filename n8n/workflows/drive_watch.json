@@ -1,0 +1,248 @@
+{
+  "name": "Drive Watch",
+  "nodes": [
+    {
+      "parameters": {
+        "event": "fileCreated",
+        "triggerOn": "specificFolder",
+        "folderToWatch": {
+          "__rl": true,
+          "value": "={{ $env.DRIVE_KNOWLEDGEBASE_FOLDER_ID }}",
+          "mode": "id"
+        },
+        "options": {},
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        }
+      },
+      "id": "79965807-26e8-51e3-b53e-7256cf5d51db",
+      "name": "Watch KnowledgeBase",
+      "type": "n8n-nodes-base.googleDriveTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "operation": "download",
+        "fileId": {
+          "__rl": true,
+          "value": "={{ $json.id }}",
+          "mode": "id"
+        },
+        "options": {
+          "binaryPropertyName": "data",
+          "googleFileConversion": {
+            "conversion": {
+              "docsToFormat": "text/plain"
+            }
+          }
+        }
+      },
+      "id": "54b92bcf-09be-5983-940b-53359abb7d06",
+      "name": "Download File",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        220,
+        300
+      ],
+      "retryOnFail": true,
+      "maxTries": 3
+    },
+    {
+      "parameters": {
+        "operation": "pdf",
+        "binaryPropertyName": "data",
+        "options": {}
+      },
+      "id": "75253839-a4ab-56af-a885-8a1bbd5b351f",
+      "name": "Extract Text",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [
+        440,
+        300
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.AGENT_A_URL }}/agentA/ingest",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ filename: $('Watch KnowledgeBase').item.json.name, driveFileId: $('Watch KnowledgeBase').item.json.id, text: $json.text || '', metadata: { source: 'drive_watch' } }) }}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "id": "1fe3803f-1190-5c8f-8f10-455efe284c76",
+      "name": "Agent A — Ingest",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        660,
+        300
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "fields": {
+          "values": [
+            {
+              "name": "Timestamp",
+              "type": "stringValue",
+              "stringValue": "={{ $now.toISO() }}"
+            },
+            {
+              "name": "User",
+              "type": "stringValue",
+              "stringValue": "drive-watch"
+            },
+            {
+              "name": "Intent",
+              "type": "stringValue",
+              "stringValue": "file_ingest"
+            },
+            {
+              "name": "Input",
+              "type": "stringValue",
+              "stringValue": "={{ $('Watch KnowledgeBase').item.json.name }}"
+            },
+            {
+              "name": "Output",
+              "type": "stringValue",
+              "stringValue": "={{ $json.chunks + ' chunks indexed' }}"
+            },
+            {
+              "name": "MessageId",
+              "type": "stringValue",
+              "stringValue": "={{ 'drive-' + $('Watch KnowledgeBase').item.json.id }}"
+            }
+          ]
+        },
+        "includeOtherFields": false,
+        "options": {}
+      },
+      "id": "8c7120d7-7465-53ed-b322-b1e9ff277bfb",
+      "name": "Conversations Row",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        880,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "sheet",
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $env.SHEET_CONVERSATIONS_ID }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Conversations",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [
+            "MessageId"
+          ],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "9ca1285a-9e47-52ac-abf1-b63c978208ba",
+      "name": "Log Conversation",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1100,
+        300
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    }
+  ],
+  "connections": {
+    "Watch KnowledgeBase": {
+      "main": [
+        [
+          {
+            "node": "Download File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download File": {
+      "main": [
+        [
+          {
+            "node": "Extract Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Text": {
+      "main": [
+        [
+          {
+            "node": "Agent A — Ingest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agent A — Ingest": {
+      "main": [
+        [
+          {
+            "node": "Conversations Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Conversations Row": {
+      "main": [
+        [
+          {
+            "node": "Log Conversation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "={{ $env.ERROR_WORKFLOW_ID }}"
+  },
+  "pinData": {}
+}

@@ -1,0 +1,14 @@
+# Shared by Agent A and Agent B.
+fastapi==0.115.7
+uvicorn[standard]==0.32.1
+pydantic==2.10.6
+python-dotenv==1.0.1
+
+# LangGraph drives both agents' node graphs.
+langgraph==0.2.61
+langchain-core==0.3.29
+langchain-openai==0.2.14
+langchain-text-splitters==0.3.5
+
+# Vector store (Agent A only, harmless for B).
+chromadb==0.5.23

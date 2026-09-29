@@ -1,0 +1,127 @@
+{
+  "name": "Error Channel",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "5d9e25a6-497f-5b45-aaee-682ac8b8bbcc",
+      "name": "On Failure",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const e = $input.first().json;\nconst ex = e.execution || {};\nconst wf = e.workflow || {};\nreturn [{ json: {\n  Timestamp: new Date().toISOString(),\n  User: 'system',\n  Intent: 'error',\n  Input: wf.name || 'unknown workflow',\n  Output: ex.lastNodeExecuted || '',\n  MessageId: 'err-' + (ex.id || Date.now()),\n  Error: (ex.error && (ex.error.message || ex.error.description)) || 'unknown error',\n  Url: ex.url || '',\n} }];"
+      },
+      "id": "66cbfedd-c692-502a-a834-b0bda92dc23c",
+      "name": "Shape Error",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "sheet",
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $env.SHEET_CONVERSATIONS_ID }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Conversations",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [
+            "MessageId"
+          ],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "56369d4d-c88f-5318-82db-8c23137507a0",
+      "name": "Log Error",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        440,
+        300
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v18.0/{{ $env.WHATSAPP_PHONE_ID }}/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "facebookGraphApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', to: $env.OPERATOR_WHATSAPP_NUMBER, type: 'text', text: { body: '⚠️ ' + $json.Input + ' failed at ' + $json.Output + '\\n' + $json.Error } }) }}",
+        "options": {}
+      },
+      "id": "c651dde4-78cc-58cf-94ef-098a9fcfd36c",
+      "name": "Alert Operator",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        660,
+        300
+      ],
+      "onError": "continueRegularOutput"
+    }
+  ],
+  "connections": {
+    "On Failure": {
+      "main": [
+        [
+          {
+            "node": "Shape Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Shape Error": {
+      "main": [
+        [
+          {
+            "node": "Log Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Error": {
+      "main": [
+        [
+          {
+            "node": "Alert Operator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "={{ $env.ERROR_WORKFLOW_ID }}"
+  },
+  "pinData": {}
+}

@@ -11,4 +11,6 @@ langchain-openai==0.2.14
 langchain-text-splitters==0.3.5
 
 # Vector store (Agent A only, harmless for B).
-chromadb==0.5.23
+# Must match the server major/minor: a 0.5.x client against a 1.x server
+# fails with a bare KeyError('_type') on every write.
+chromadb==1.0.20

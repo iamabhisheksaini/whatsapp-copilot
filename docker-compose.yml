@@ -41,7 +41,10 @@ services:
     restart: unless-stopped
 
   chroma:
-    image: chromadb/chroma:latest
+    # Pinned by digest, not :latest. The client in agents/requirements.txt is
+    # version-locked to this server; letting the tag drift silently breaks
+    # every ingest the next time the image is pulled.
+    image: chromadb/chroma@sha256:f9cef32d15ba51e15a7d288d0e0086607921c8761ed6717d722e2c055e04798b
     container_name: chroma
     ports:
       - "8003:8000"

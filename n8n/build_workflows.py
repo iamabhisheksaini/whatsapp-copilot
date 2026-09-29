@@ -242,29 +242,40 @@ def set_fields(name, fields, pos):
 # --- 1) whatsapp_router ------------------------------------------------------
 
 NORMALIZE_JS = r"""
-// Flatten Meta's nested webhook payload into one predictable object.
-// Also accepts a flat {message, from} body so the flow can be tested with curl.
+// Flatten whatever shape the request arrived in into one predictable object.
+//
+// Three shapes reach this node:
+//   1. Live Meta delivery  {object, entry:[{changes:[{field, value}]}]}
+//   2. Meta dashboard Test {field, value}   - no entry[] wrapper
+//   3. Local curl testing  {message, from, messageId}
+// Shape 2 is easy to miss: it silently falls through to the fallback branch and
+// looks like an intent-classification bug rather than a parsing one.
 const body = $input.first().json.body ?? $input.first().json;
 
 let text = '', from = '', messageId = '', mediaId = '', mimeType = '', filename = '';
 
-try {
-  const value = body.entry[0].changes[0].value;
-  const msg = (value.messages || [])[0];
-  if (msg) {
-    from = msg.from || '';
-    messageId = msg.id || '';
-    if (msg.type === 'text') {
-      text = msg.text?.body || '';
-    } else if (['document', 'image', 'audio', 'video'].includes(msg.type)) {
-      const media = msg[msg.type] || {};
-      mediaId = media.id || '';
-      mimeType = media.mime_type || '';
-      filename = media.filename || `${msg.type}-${mediaId}`;
-      text = media.caption || '';
-    }
+// Locate the "value" object regardless of how deeply it is wrapped.
+let value = null;
+try { value = body.entry[0].changes[0].value; } catch (e) { /* not shape 1 */ }
+if (!value && body.value && body.value.messages) value = body.value;   // shape 2
+if (!value && body.messages) value = body;                             // already unwrapped
+
+const msg = value ? (value.messages || [])[0] : null;
+
+if (msg) {
+  from = msg.from || '';
+  messageId = msg.id || '';
+  if (msg.type === 'text') {
+    text = msg.text?.body || '';
+  } else if (['document', 'image', 'audio', 'video'].includes(msg.type)) {
+    const media = msg[msg.type] || {};
+    mediaId = media.id || '';
+    mimeType = media.mime_type || '';
+    filename = media.filename || `${msg.type}-${mediaId}`;
+    text = media.caption || '';
   }
-} catch (e) {
+} else {
+  // Shape 3, or a delivery-status callback with no message in it.
   text = body.message || body.text || '';
   from = body.from || '';
   messageId = body.messageId || '';

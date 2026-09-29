@@ -93,11 +93,13 @@ def workflow(name, nodes, connections, active=False):
         "nodes": nodes,
         "connections": connections,
         "active": active,
-        "settings": {
-            "executionOrder": "v1",
-            # Every workflow reports failures to the shared error channel.
-            "errorWorkflow": "={{ $env.ERROR_WORKFLOW_ID }}",
-        },
+        # errorWorkflow is deliberately absent. It takes a literal workflow id,
+        # not an expression — n8n does not evaluate {{ $env.X }} here, it just
+        # logs "Could not find error workflow" on every failure. The id differs
+        # per instance, so hardcoding it would not survive a re-import either.
+        # Set it per workflow after import: Workflow menu -> Settings ->
+        # Error Workflow -> Error Channel.
+        "settings": {"executionOrder": "v1"},
         "pinData": {},
     }
 

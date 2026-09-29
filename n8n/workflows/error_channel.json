@@ -120,8 +120,7 @@
   },
   "active": false,
   "settings": {
-    "executionOrder": "v1",
-    "errorWorkflow": "={{ $env.ERROR_WORKFLOW_ID }}"
+    "executionOrder": "v1"
   },
   "pinData": {}
 }

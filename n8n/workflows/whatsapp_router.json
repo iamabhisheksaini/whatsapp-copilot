@@ -16,7 +16,7 @@
         -200,
         60
       ],
-      "webhookId": "5883ea9f-06a7-4525-b766-b677e4a7bd3c"
+      "webhookId": "18d94e20-b0a8-4ab9-a60d-7d4bd9fe7475"
     },
     {
       "parameters": {
@@ -61,7 +61,7 @@
         -200,
         420
       ],
-      "webhookId": "6c8d6df3-f358-4193-a4ff-4d80826dbd42"
+      "webhookId": "0b4d8f5b-b9aa-43ac-9190-445b958ebc6b"
     },
     {
       "parameters": {
@@ -2064,8 +2064,7 @@
   },
   "active": false,
   "settings": {
-    "executionOrder": "v1",
-    "errorWorkflow": "={{ $env.ERROR_WORKFLOW_ID }}"
+    "executionOrder": "v1"
   },
   "pinData": {}
 }

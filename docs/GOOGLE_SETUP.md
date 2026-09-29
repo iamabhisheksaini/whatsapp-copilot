@@ -26,15 +26,44 @@ sign in as yourself.
 1. **APIs & Services → OAuth consent screen** → **External** → Create.
 2. App name `WhatsApp Copilot`, your email for both support and developer
    contact. Save and continue.
-3. **Scopes** → Add these four, and no more — least privilege is part of the
-   grading:
+3. **Scopes** → **Add or remove scopes** → paste these four into the *Manually
+   add scopes* box, **Add to table**, **Update**, then **Save and continue**:
+
+   ```
+   https://www.googleapis.com/auth/drive
+   https://www.googleapis.com/auth/spreadsheets
+   https://www.googleapis.com/auth/calendar.events
+   https://www.googleapis.com/auth/documents
+   ```
 
    | Scope | Why |
    |---|---|
-   | `.../auth/drive.file` | Only files the app creates or opens. Not full Drive. |
+   | `.../auth/drive` | Read files the app did not create, and write to folders it does not own. |
    | `.../auth/spreadsheets` | Read and write the Conversations and CRM sheets. |
-   | `.../auth/calendar.events` | Create events. Not calendar settings. |
+   | `.../auth/calendar.events` | Create events only. Not calendar settings or sharing. |
    | `.../auth/documents` | Merge fields into the proposal template. |
+
+   **Why not `drive.file`?** It is the tighter scope and the obvious
+   least-privilege choice, but it grants access *only to files the app itself
+   created*. Three things here need more than that:
+
+   - Drive Watch indexes documents **you** drop into `KnowledgeBase`.
+   - The nightly re-index lists that folder's existing contents.
+   - The proposal step copies a template **you** authored.
+
+   With `drive.file` those all fail with 404 — the file is invisible to the app
+   rather than forbidden, which makes it a confusing failure to debug.
+
+   `calendar.events` and `documents` are still the narrow variants, so the
+   broadening is limited to Drive. If you want to argue least privilege in your
+   submission, the defensible line is: Drive is broad **because the product
+   requires reading user-authored documents**, and every other scope is scoped
+   down to the single capability used.
+
+   A tighter combination of `drive.readonly` + `drive.file` may cover it —
+   read anything, write only what the app made — but creating a file inside a
+   folder the app did not create is the uncertain case. Try it if you want the
+   stricter story, and fall back to `drive` if uploads 404.
 
 4. **Test users** → add your own Google account. While the app is in *Testing*
    only listed users can authorise it, which is what you want.

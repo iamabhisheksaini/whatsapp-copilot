@@ -207,14 +207,25 @@ def sheet_append(name, sheet_env, tab, pos, matching=None):
 
 
 def set_fields(name, fields, pos):
+    """Build a Set node that emits exactly the given columns.
+
+    Set typeVersion 3.3+ takes `assignments`, not the older `fields.values`.
+    Using the old shape is accepted on import and runs green, but emits an empty
+    object — which then appends a blank row to Sheets with no error anywhere.
+    """
     return node(
         name,
         "set",
         {
             "mode": "manual",
-            "fields": {
-                "values": [
-                    {"name": k, "type": "stringValue", "stringValue": v}
+            "assignments": {
+                "assignments": [
+                    {
+                        "id": str(uuid.uuid5(uuid.NAMESPACE_URL, f"{name}/{k}")),
+                        "name": k,
+                        "value": v,
+                        "type": "string",
+                    }
                     for k, v in fields.items()
                 ]
             },

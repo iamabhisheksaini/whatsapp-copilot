@@ -99,37 +99,43 @@
     {
       "parameters": {
         "mode": "manual",
-        "fields": {
-          "values": [
+        "assignments": {
+          "assignments": [
             {
+              "id": "90574379-887e-55c6-9cf6-1bb410802fb9",
               "name": "Timestamp",
-              "type": "stringValue",
-              "stringValue": "={{ $now.toISO() }}"
+              "value": "={{ $now.toISO() }}",
+              "type": "string"
             },
             {
+              "id": "62a9931a-d59f-5db3-89ea-b1049ea10926",
               "name": "User",
-              "type": "stringValue",
-              "stringValue": "drive-watch"
+              "value": "drive-watch",
+              "type": "string"
             },
             {
+              "id": "e1a5e4ee-1652-528c-a246-b13466db8e2c",
               "name": "Intent",
-              "type": "stringValue",
-              "stringValue": "file_ingest"
+              "value": "file_ingest",
+              "type": "string"
             },
             {
+              "id": "ef4b6b11-31f1-50f9-a336-e2d823209962",
               "name": "Input",
-              "type": "stringValue",
-              "stringValue": "={{ $('Watch KnowledgeBase').item.json.name }}"
+              "value": "={{ $('Watch KnowledgeBase').item.json.name }}",
+              "type": "string"
             },
             {
+              "id": "7f65fbd8-c27d-5492-85c8-e3a833559257",
               "name": "Output",
-              "type": "stringValue",
-              "stringValue": "={{ $json.chunks + ' chunks indexed' }}"
+              "value": "={{ $json.chunks + ' chunks indexed' }}",
+              "type": "string"
             },
             {
+              "id": "372329ec-1828-5de6-a01d-5517689da7db",
               "name": "MessageId",
-              "type": "stringValue",
-              "stringValue": "={{ 'drive-' + $('Watch KnowledgeBase').item.json.id }}"
+              "value": "={{ 'drive-' + $('Watch KnowledgeBase').item.json.id }}",
+              "type": "string"
             }
           ]
         },

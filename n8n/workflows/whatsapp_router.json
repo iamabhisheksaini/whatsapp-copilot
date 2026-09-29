@@ -16,7 +16,7 @@
         -200,
         60
       ],
-      "webhookId": "318e4439-e2ef-4122-a95f-814142007a73"
+      "webhookId": "5883ea9f-06a7-4525-b766-b677e4a7bd3c"
     },
     {
       "parameters": {
@@ -61,7 +61,7 @@
         -200,
         420
       ],
-      "webhookId": "67287088-45c0-48cd-9d32-0d60a1d67e99"
+      "webhookId": "6c8d6df3-f358-4193-a4ff-4d80826dbd42"
     },
     {
       "parameters": {
@@ -236,52 +236,61 @@
     {
       "parameters": {
         "mode": "manual",
-        "fields": {
-          "values": [
+        "assignments": {
+          "assignments": [
             {
+              "id": "793a0e96-892a-53f5-abb2-af9cab4f52a1",
               "name": "Timestamp",
-              "type": "stringValue",
-              "stringValue": "={{ $now.toISO() }}"
+              "value": "={{ $now.toISO() }}",
+              "type": "string"
             },
             {
+              "id": "5fdabf2f-6bed-5268-996e-69f022f66cce",
               "name": "User",
-              "type": "stringValue",
-              "stringValue": "={{ $('Normalize Inbound').first().json.from }}"
+              "value": "={{ $('Normalize Inbound').first().json.from }}",
+              "type": "string"
             },
             {
+              "id": "e5447f4c-5837-58f0-b124-93d5e81c4aaa",
               "name": "Intent",
-              "type": "stringValue",
-              "stringValue": "file_ingest"
+              "value": "file_ingest",
+              "type": "string"
             },
             {
+              "id": "28382137-d89d-5741-bd52-0538507b3bad",
               "name": "Input",
-              "type": "stringValue",
-              "stringValue": "={{ $('Normalize Inbound').first().json.filename }}"
+              "value": "={{ $('Normalize Inbound').first().json.filename }}",
+              "type": "string"
             },
             {
+              "id": "d8f02641-e34f-5502-9d24-5ee3da4f2820",
               "name": "Output",
-              "type": "stringValue",
-              "stringValue": "={{ $json.chunks ? $json.chunks + ' chunks indexed' : 'ingest failed' }}"
+              "value": "={{ $json.chunks ? $json.chunks + ' chunks indexed' : 'ingest failed' }}",
+              "type": "string"
             },
             {
+              "id": "29ad30f7-d479-5567-acc3-751cba521fbf",
               "name": "Confidence",
-              "type": "stringValue",
-              "stringValue": ""
+              "value": "",
+              "type": "string"
             },
             {
+              "id": "bcbedfd5-3443-5d06-9f7b-475aaaaf5931",
               "name": "Citations",
-              "type": "stringValue",
-              "stringValue": "={{ 'https://drive.google.com/file/d/' + $('Upload to Drive').first().json.id }}"
+              "value": "={{ 'https://drive.google.com/file/d/' + $('Upload to Drive').first().json.id }}",
+              "type": "string"
             },
             {
+              "id": "aa4d58bf-c53f-5819-8b20-8be9d735d3cb",
               "name": "MessageId",
-              "type": "stringValue",
-              "stringValue": "={{ $('Normalize Inbound').first().json.messageId }}"
+              "value": "={{ $('Normalize Inbound').first().json.messageId }}",
+              "type": "string"
             },
             {
+              "id": "48363afc-e5b2-5497-aad1-75360e8c0f6e",
               "name": "Error",
-              "type": "stringValue",
-              "stringValue": "={{ $json.error || '' }}"
+              "value": "={{ $json.error || '' }}",
+              "type": "string"
             }
           ]
         },
@@ -583,52 +592,61 @@
     {
       "parameters": {
         "mode": "manual",
-        "fields": {
-          "values": [
+        "assignments": {
+          "assignments": [
             {
+              "id": "607f9a72-8a1f-51b5-89aa-1cda93c6e07b",
               "name": "Timestamp",
-              "type": "stringValue",
-              "stringValue": "={{ $now.toISO() }}"
+              "value": "={{ $now.toISO() }}",
+              "type": "string"
             },
             {
+              "id": "57837ed5-a768-57f7-b17d-f9eae3142bd4",
               "name": "User",
-              "type": "stringValue",
-              "stringValue": "={{ $('Normalize Inbound').first().json.from }}"
+              "value": "={{ $('Normalize Inbound').first().json.from }}",
+              "type": "string"
             },
             {
+              "id": "6daeb960-0f08-595d-8bcc-ad96b2404b94",
               "name": "Intent",
-              "type": "stringValue",
-              "stringValue": "knowledge_qa"
+              "value": "knowledge_qa",
+              "type": "string"
             },
             {
+              "id": "d261d885-5da7-50f2-91ec-fa538bcae1da",
               "name": "Input",
-              "type": "stringValue",
-              "stringValue": "={{ $('Normalize Inbound').first().json.text }}"
+              "value": "={{ $('Normalize Inbound').first().json.text }}",
+              "type": "string"
             },
             {
+              "id": "8e882f4b-9738-5504-8bcf-faa2a3af4d79",
               "name": "Output",
-              "type": "stringValue",
-              "stringValue": "={{ $json.answer || '' }}"
+              "value": "={{ $json.answer || '' }}",
+              "type": "string"
             },
             {
+              "id": "a3b3d781-4c87-538f-8fd9-2f82ccc824ee",
               "name": "Confidence",
-              "type": "stringValue",
-              "stringValue": "={{ $json.confidence }}"
+              "value": "={{ $json.confidence }}",
+              "type": "string"
             },
             {
+              "id": "85db2a12-dc31-5924-9bbe-619a91547a82",
               "name": "Citations",
-              "type": "stringValue",
-              "stringValue": "={{ ($json.citations || []).map(c => c.title).join(', ') }}"
+              "value": "={{ ($json.citations || []).map(c => c.title).join(', ') }}",
+              "type": "string"
             },
             {
+              "id": "7544bbf8-4f91-55e8-89e0-eece7a233786",
               "name": "MessageId",
-              "type": "stringValue",
-              "stringValue": "={{ $('Normalize Inbound').first().json.messageId }}"
+              "value": "={{ $('Normalize Inbound').first().json.messageId }}",
+              "type": "string"
             },
             {
+              "id": "de8aac25-b59b-5a02-b037-86a6b7739e8d",
               "name": "Error",
-              "type": "stringValue",
-              "stringValue": "={{ $json.error || '' }}"
+              "value": "={{ $json.error || '' }}",
+              "type": "string"
             }
           ]
         },
@@ -758,67 +776,79 @@
     {
       "parameters": {
         "mode": "manual",
-        "fields": {
-          "values": [
+        "assignments": {
+          "assignments": [
             {
+              "id": "90b90472-d2cf-5b00-a6da-3199a0addb43",
               "name": "Timestamp",
-              "type": "stringValue",
-              "stringValue": "={{ $now.toISO() }}"
+              "value": "={{ $now.toISO() }}",
+              "type": "string"
             },
             {
+              "id": "b288a874-a665-58e6-aa53-60c2b30441d7",
               "name": "LeadId",
-              "type": "stringValue",
-              "stringValue": "={{ ($json.company || 'unknown').toLowerCase().replace(/[^a-z0-9]+/g,'-') }}"
+              "value": "={{ ($json.company || 'unknown').toLowerCase().replace(/[^a-z0-9]+/g,'-') }}",
+              "type": "string"
             },
             {
+              "id": "d752435f-0b20-56ce-8336-f346b85f5dd2",
               "name": "Name",
-              "type": "stringValue",
-              "stringValue": "={{ $json.name || '' }}"
+              "value": "={{ $json.name || '' }}",
+              "type": "string"
             },
             {
+              "id": "49c8cdb2-2532-5643-beb7-b42fc77ad5bd",
               "name": "Company",
-              "type": "stringValue",
-              "stringValue": "={{ $json.company || '' }}"
+              "value": "={{ $json.company || '' }}",
+              "type": "string"
             },
             {
+              "id": "4157e969-54f3-5495-98f7-34f3d9f5184e",
               "name": "Intent",
-              "type": "stringValue",
-              "stringValue": "={{ $json.intent || '' }}"
+              "value": "={{ $json.intent || '' }}",
+              "type": "string"
             },
             {
+              "id": "4ff42224-e709-524a-997b-580e11c99949",
               "name": "Budget",
-              "type": "stringValue",
-              "stringValue": "={{ $json.budget || '' }}"
+              "value": "={{ $json.budget || '' }}",
+              "type": "string"
             },
             {
+              "id": "eed17414-eb34-530f-896e-ac135bfc6bd0",
               "name": "Stage",
-              "type": "stringValue",
-              "stringValue": "New"
+              "value": "New",
+              "type": "string"
             },
             {
+              "id": "f6567b92-263e-553c-a538-95681f58ee59",
               "name": "Owner",
-              "type": "stringValue",
-              "stringValue": "={{ $('Normalize Inbound').first().json.from }}"
+              "value": "={{ $('Normalize Inbound').first().json.from }}",
+              "type": "string"
             },
             {
+              "id": "791b3d78-955c-5ead-89b0-57c4c08882be",
               "name": "NextStepDate",
-              "type": "stringValue",
-              "stringValue": ""
+              "value": "",
+              "type": "string"
             },
             {
+              "id": "533ea979-c9e7-5597-9153-8ebeb1a9829f",
               "name": "Domain",
-              "type": "stringValue",
-              "stringValue": "={{ $json.normalizedCompanyDomain || '' }}"
+              "value": "={{ $json.normalizedCompanyDomain || '' }}",
+              "type": "string"
             },
             {
+              "id": "02cdcd47-2462-536d-9471-4a40b550e268",
               "name": "QualityScore",
-              "type": "stringValue",
-              "stringValue": "={{ $json.qualityScore }}"
+              "value": "={{ $json.qualityScore }}",
+              "type": "string"
             },
             {
+              "id": "120aa5ca-34b5-55e3-80fb-c9a155433422",
               "name": "Notes",
-              "type": "stringValue",
-              "stringValue": "={{ $json.notes || '' }}"
+              "value": "={{ $json.notes || '' }}",
+              "type": "string"
             }
           ]
         },
@@ -997,22 +1027,25 @@
     {
       "parameters": {
         "mode": "manual",
-        "fields": {
-          "values": [
+        "assignments": {
+          "assignments": [
             {
+              "id": "756b83cc-6fb1-5b27-ac58-c68dd03ecb6c",
               "name": "LeadId",
-              "type": "stringValue",
-              "stringValue": "={{ (($('Agent B — Proposal Copy').first().json.company) || 'unknown').toLowerCase().replace(/[^a-z0-9]+/g,'-') }}"
+              "value": "={{ (($('Agent B — Proposal Copy').first().json.company) || 'unknown').toLowerCase().replace(/[^a-z0-9]+/g,'-') }}",
+              "type": "string"
             },
             {
+              "id": "b7c58652-f89d-599d-bd4e-ff5ea246e4dd",
               "name": "Links",
-              "type": "stringValue",
-              "stringValue": "={{ 'https://docs.google.com/document/d/' + $('Copy Proposal Template').first().json.id + '/export?format=pdf' }}"
+              "value": "={{ 'https://docs.google.com/document/d/' + $('Copy Proposal Template').first().json.id + '/export?format=pdf' }}",
+              "type": "string"
             },
             {
+              "id": "7f522215-5165-5a0d-98ef-52179c47ba96",
               "name": "Stage",
-              "type": "stringValue",
-              "stringValue": "Proposal sent"
+              "value": "Proposal sent",
+              "type": "string"
             }
           ]
         },
@@ -1238,17 +1271,19 @@
     {
       "parameters": {
         "mode": "manual",
-        "fields": {
-          "values": [
+        "assignments": {
+          "assignments": [
             {
+              "id": "457e98f5-44c7-5a7d-bfbf-eb98f521c92e",
               "name": "LeadId",
-              "type": "stringValue",
-              "stringValue": "={{ (($('Classify Intent').first().json.entities || {}).company || 'unknown').toLowerCase().replace(/[^a-z0-9]+/g,'-') }}"
+              "value": "={{ (($('Classify Intent').first().json.entities || {}).company || 'unknown').toLowerCase().replace(/[^a-z0-9]+/g,'-') }}",
+              "type": "string"
             },
             {
+              "id": "9223f118-5f3a-54ed-9940-e6f413f8af25",
               "name": "NextStepDate",
-              "type": "stringValue",
-              "stringValue": "={{ $('Create Calendar Event').first().json.start.dateTime || $('Create Calendar Event').first().json.start }}"
+              "value": "={{ $('Create Calendar Event').first().json.start.dateTime || $('Create Calendar Event').first().json.start }}",
+              "type": "string"
             }
           ]
         },
@@ -1378,22 +1413,25 @@
     {
       "parameters": {
         "mode": "manual",
-        "fields": {
-          "values": [
+        "assignments": {
+          "assignments": [
             {
+              "id": "04d08d62-dd70-533d-8cd5-6ad82fe22578",
               "name": "LeadId",
-              "type": "stringValue",
-              "stringValue": "={{ (($('Classify Intent').first().json.entities || {}).company || 'unknown').toLowerCase().replace(/[^a-z0-9]+/g,'-') }}"
+              "value": "={{ (($('Classify Intent').first().json.entities || {}).company || 'unknown').toLowerCase().replace(/[^a-z0-9]+/g,'-') }}",
+              "type": "string"
             },
             {
+              "id": "ba4be6ed-0793-5bb8-97e4-974e816100fc",
               "name": "Stage",
-              "type": "stringValue",
-              "stringValue": "={{ $json.label }}"
+              "value": "={{ $json.label }}",
+              "type": "string"
             },
             {
+              "id": "da66b777-acc2-5d4f-ab3f-c54ef746519a",
               "name": "Notes",
-              "type": "stringValue",
-              "stringValue": "={{ '[' + $json.reasonCategory + '] ' + $json.reasonSummary }}"
+              "value": "={{ '[' + $json.reasonCategory + '] ' + $json.reasonSummary }}",
+              "type": "string"
             }
           ]
         },

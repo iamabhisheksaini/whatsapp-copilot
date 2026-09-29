@@ -16,7 +16,7 @@
         -200,
         60
       ],
-      "webhookId": "18d94e20-b0a8-4ab9-a60d-7d4bd9fe7475"
+      "webhookId": "cae750a4-e76a-495c-8a88-39f482141c8e"
     },
     {
       "parameters": {
@@ -61,7 +61,7 @@
         -200,
         420
       ],
-      "webhookId": "0b4d8f5b-b9aa-43ac-9190-445b958ebc6b"
+      "webhookId": "7bc0d67a-dfa7-46f2-a5ae-92be6a1e559c"
     },
     {
       "parameters": {
@@ -1010,7 +1010,7 @@
         "nodeCredentialType": "googleDocsOAuth2Api",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ requests: [{ replaceAllText: { containsText: { text: '{{TITLE}}', matchCase: true }, replaceText: $('Agent B — Proposal Copy').first().json.title } },{ replaceAllText: { containsText: { text: '{{SUMMARY}}', matchCase: true }, replaceText: $('Agent B — Proposal Copy').first().json.summaryBlurb } },{ replaceAllText: { containsText: { text: '{{BULLETS}}', matchCase: true }, replaceText: ($('Agent B — Proposal Copy').first().json.bulletPoints || []).map(b => '• ' + b).join('\\n') } }] }) }}",
+        "jsonBody": "={{ (() => { const ph = n => '{' + '{' + n + '}' + '}'; const c = $('Agent B — Proposal Copy').first().json; return JSON.stringify({ requests: [{ replaceAllText: { containsText: { text: ph('TITLE'), matchCase: true }, replaceText: c.title } },{ replaceAllText: { containsText: { text: ph('SUMMARY'), matchCase: true }, replaceText: c.summaryBlurb } },{ replaceAllText: { containsText: { text: ph('BULLETS'), matchCase: true }, replaceText: (c.bulletPoints || []).map(b => '• ' + b).join('\\n') } }] }); })() }}",
         "options": {}
       },
       "id": "731a4066-815e-52a9-93e6-b6ecbc8ccb82",

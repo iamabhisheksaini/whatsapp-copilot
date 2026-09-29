@@ -478,17 +478,22 @@ def build_router():
             "nodeCredentialType": "googleDocsOAuth2Api",
             "sendBody": True,
             "specifyBody": "json",
-            # Template placeholders {{TITLE}}, {{SUMMARY}}, {{BULLETS}} are
-            # replaced in one batch so a partial fill can't happen.
-            "jsonBody": "={{ JSON.stringify({ requests: ["
-                        "{ replaceAllText: { containsText: { text: '{{TITLE}}', matchCase: true }, "
-                        "replaceText: $('Agent B — Proposal Copy').first().json.title } },"
-                        "{ replaceAllText: { containsText: { text: '{{SUMMARY}}', matchCase: true }, "
-                        "replaceText: $('Agent B — Proposal Copy').first().json.summaryBlurb } },"
-                        "{ replaceAllText: { containsText: { text: '{{BULLETS}}', matchCase: true }, "
-                        "replaceText: ($('Agent B — Proposal Copy').first().json.bulletPoints || [])"
-                        ".map(b => '• ' + b).join('\\n') } }"
-                        "] }) }}",
+            # The document's placeholders are {{TITLE}}, {{SUMMARY}} and
+            # {{BULLETS}}, but writing those braces literally inside an n8n
+            # ={{ }} expression makes its parser try to evaluate them and fail
+            # with "invalid syntax". Assembling each token by concatenation
+            # keeps the produced string identical while leaving nothing for the
+            # template engine to latch onto.
+            "jsonBody": "={{ (() => { const ph = n => '{' + '{' + n + '}' + '}'; "
+                        "const c = $('Agent B — Proposal Copy').first().json; "
+                        "return JSON.stringify({ requests: ["
+                        "{ replaceAllText: { containsText: { text: ph('TITLE'), matchCase: true }, "
+                        "replaceText: c.title } },"
+                        "{ replaceAllText: { containsText: { text: ph('SUMMARY'), matchCase: true }, "
+                        "replaceText: c.summaryBlurb } },"
+                        "{ replaceAllText: { containsText: { text: ph('BULLETS'), matchCase: true }, "
+                        "replaceText: (c.bulletPoints || []).map(b => '• ' + b).join('\\n') } }"
+                        "] }); })() }}",
             "options": {},
         }, [1340, 540], tv=TV["http"], retryOnFail=True, maxTries=3),
         set_fields("CRM Row (Proposal)", {

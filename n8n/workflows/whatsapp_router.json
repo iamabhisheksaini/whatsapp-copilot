@@ -16,7 +16,7 @@
         -200,
         60
       ],
-      "webhookId": "316410bc-df4c-4312-98aa-26ce360d292c"
+      "webhookId": "2089f8e8-47c1-4d45-8765-01a611ddfe20"
     },
     {
       "parameters": {
@@ -61,7 +61,7 @@
         -200,
         420
       ],
-      "webhookId": "b345b974-24a6-426b-8c5c-c6fb318d3e81"
+      "webhookId": "b1c2b4c5-bc84-416a-9e4d-ed2a92ceabdc"
     },
     {
       "parameters": {
@@ -180,8 +180,8 @@
       "parameters": {
         "method": "GET",
         "url": "={{ $json.url }}",
-        "authentication": "predefinedCredentialType",
-        "nodeCredentialType": "facebookGraphApi",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
         "options": {
           "response": {
             "response": {

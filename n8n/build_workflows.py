@@ -368,11 +368,17 @@ def build_router():
             "nodeCredentialType": "facebookGraphApi",
             "options": {},
         }, [460, 200], tv=TV["http"], retryOnFail=True, maxTries=3),
+        # The media file is served from lookaside.fbsbx.com, not graph.facebook.com.
+        # That host requires the token as an "Authorization: Bearer" header, while
+        # the Facebook Graph credential sends it as a query parameter — which the
+        # CDN rejects with an authorization error. A Bearer credential holding the
+        # same Meta token is what works here, and keeps the token in n8n's
+        # credential store rather than in the workflow.
         node("Download Media", "httpRequest", {
             "method": "GET",
             "url": "={{ $json.url }}",
-            "authentication": "predefinedCredentialType",
-            "nodeCredentialType": "facebookGraphApi",
+            "authentication": "genericCredentialType",
+            "genericAuthType": "httpBearerAuth",
             "options": {"response": {"response": {"responseFormat": "file", "outputPropertyName": "data"}}},
         }, [680, 200], tv=TV["http"], retryOnFail=True, maxTries=3),
         node("Upload to Drive", "googleDrive", {

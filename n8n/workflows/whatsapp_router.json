@@ -16,7 +16,7 @@
         -200,
         60
       ],
-      "webhookId": "2089f8e8-47c1-4d45-8765-01a611ddfe20"
+      "webhookId": "4802bbf3-9f01-4a8f-92e1-19be93951fa1"
     },
     {
       "parameters": {
@@ -50,8 +50,10 @@
       "parameters": {
         "httpMethod": "POST",
         "path": "whatsapp-router",
-        "responseMode": "responseNode",
-        "options": {}
+        "responseMode": "onReceived",
+        "options": {
+          "responseCode": 200
+        }
       },
       "id": "48d55e22-9675-5df7-80f8-9919ffbe7a9b",
       "name": "WhatsApp Webhook",
@@ -61,7 +63,7 @@
         -200,
         420
       ],
-      "webhookId": "b1c2b4c5-bc84-416a-9e4d-ed2a92ceabdc"
+      "webhookId": "8314a907-104c-4a01-865f-5425f1d8a491"
     },
     {
       "parameters": {
@@ -107,21 +109,6 @@
       "position": [
         130,
         420
-      ]
-    },
-    {
-      "parameters": {
-        "respondWith": "json",
-        "responseBody": "={{ JSON.stringify({ ignored: true, reason: \"status callback, not a message\" }) }}",
-        "options": {}
-      },
-      "id": "7e312c5a-d729-5efe-b7d0-9bcf08aee271",
-      "name": "Respond — Ignored",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.1,
-      "position": [
-        350,
-        620
       ]
     },
     {
@@ -412,21 +399,6 @@
       "retryOnFail": true,
       "maxTries": 3,
       "waitBetweenTries": 2000
-    },
-    {
-      "parameters": {
-        "respondWith": "json",
-        "responseBody": "={{ JSON.stringify($json) }}",
-        "options": {}
-      },
-      "id": "4b2fff3e-9878-55be-a6c7-2c415462302d",
-      "name": "Respond — Ingest",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.1,
-      "position": [
-        2220,
-        200
-      ]
     },
     {
       "parameters": {
@@ -771,21 +743,6 @@
     },
     {
       "parameters": {
-        "respondWith": "json",
-        "responseBody": "={{ JSON.stringify($json) }}",
-        "options": {}
-      },
-      "id": "940e551c-15ac-5846-8033-b686cb65a317",
-      "name": "Respond — QA",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.1,
-      "position": [
-        1780,
-        140
-      ]
-    },
-    {
-      "parameters": {
         "method": "POST",
         "url": "={{ $env.AGENT_B_URL }}/agentB/newlead",
         "sendHeaders": true,
@@ -973,21 +930,6 @@
     },
     {
       "parameters": {
-        "respondWith": "json",
-        "responseBody": "={{ JSON.stringify($json) }}",
-        "options": {}
-      },
-      "id": "5f0afbf0-5fe4-534e-abf8-ee709e806853",
-      "name": "Respond — Lead",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.1,
-      "position": [
-        1780,
-        340
-      ]
-    },
-    {
-      "parameters": {
         "method": "POST",
         "url": "={{ $env.AGENT_B_URL }}/agentB/proposal-copy",
         "sendHeaders": true,
@@ -1167,21 +1109,6 @@
       "retryOnFail": true,
       "maxTries": 3,
       "waitBetweenTries": 2000
-    },
-    {
-      "parameters": {
-        "respondWith": "json",
-        "responseBody": "={{ JSON.stringify($json) }}",
-        "options": {}
-      },
-      "id": "6e624e6c-4389-5b07-bd06-a41d9b14818a",
-      "name": "Respond — Proposal",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.1,
-      "position": [
-        2220,
-        540
-      ]
     },
     {
       "parameters": {
@@ -1408,21 +1335,6 @@
     },
     {
       "parameters": {
-        "respondWith": "json",
-        "responseBody": "={{ JSON.stringify($json) }}",
-        "options": {}
-      },
-      "id": "f04aefea-3869-5d73-8c4c-fe3545e6bacf",
-      "name": "Respond — Next Step",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.1,
-      "position": [
-        2220,
-        760
-      ]
-    },
-    {
-      "parameters": {
         "method": "POST",
         "url": "={{ $env.AGENT_B_URL }}/agentB/status-classify",
         "sendHeaders": true,
@@ -1556,21 +1468,6 @@
     },
     {
       "parameters": {
-        "respondWith": "json",
-        "responseBody": "={{ JSON.stringify($json) }}",
-        "options": {}
-      },
-      "id": "81a499dd-63db-57ca-8855-9ba6fdc95202",
-      "name": "Respond — Status",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.1,
-      "position": [
-        1780,
-        960
-      ]
-    },
-    {
-      "parameters": {
         "method": "POST",
         "url": "=https://graph.facebook.com/v18.0/{{ $env.WHATSAPP_PHONE_ID }}/messages",
         "authentication": "predefinedCredentialType",
@@ -1591,21 +1488,6 @@
       "retryOnFail": true,
       "maxTries": 3,
       "waitBetweenTries": 2000
-    },
-    {
-      "parameters": {
-        "respondWith": "json",
-        "responseBody": "={{ JSON.stringify($json) }}",
-        "options": {}
-      },
-      "id": "025ac018-4b36-5eed-9e78-738a8d8cb9e1",
-      "name": "Respond — Fallback",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.1,
-      "position": [
-        1120,
-        1140
-      ]
     }
   ],
   "connections": {
@@ -1662,13 +1544,7 @@
             "index": 0
           }
         ],
-        [
-          {
-            "node": "Respond — Ignored",
-            "type": "main",
-            "index": 0
-          }
-        ]
+        []
       ]
     },
     "Has Attachment?": {
@@ -1766,17 +1642,6 @@
         ]
       ]
     },
-    "Reply — File Added": {
-      "main": [
-        [
-          {
-            "node": "Respond — Ingest",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
     "Classify Intent": {
       "main": [
         [
@@ -1867,17 +1732,6 @@
         ]
       ]
     },
-    "Reply — Answer": {
-      "main": [
-        [
-          {
-            "node": "Respond — QA",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
     "Agent B — New Lead": {
       "main": [
         [
@@ -1905,17 +1759,6 @@
         [
           {
             "node": "Reply — Lead",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Reply — Lead": {
-      "main": [
-        [
-          {
-            "node": "Respond — Lead",
             "type": "main",
             "index": 0
           }
@@ -1971,17 +1814,6 @@
         [
           {
             "node": "Reply — Proposal",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Reply — Proposal": {
-      "main": [
-        [
-          {
-            "node": "Respond — Proposal",
             "type": "main",
             "index": 0
           }
@@ -2061,17 +1893,6 @@
         ]
       ]
     },
-    "Reply — Scheduled": {
-      "main": [
-        [
-          {
-            "node": "Respond — Next Step",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
     "Agent B — Status Classify": {
       "main": [
         [
@@ -2099,28 +1920,6 @@
         [
           {
             "node": "Reply — Status",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Reply — Status": {
-      "main": [
-        [
-          {
-            "node": "Respond — Status",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Reply — Fallback": {
-      "main": [
-        [
-          {
-            "node": "Respond — Fallback",
             "type": "main",
             "index": 0
           }

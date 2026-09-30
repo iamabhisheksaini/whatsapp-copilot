@@ -72,6 +72,12 @@ services:
       # true in a future release, which would break every expression below.
       - N8N_BLOCK_ENV_ACCESS_IN_NODE=false
       - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=true
+      # Every inbound message also produces status callbacks, so execution
+      # history grows fast. Unbounded, it fills the disk and SQLite starts
+      # failing writes — which surfaces as webhooks returning 500.
+      - EXECUTIONS_DATA_PRUNE=true
+      - EXECUTIONS_DATA_MAX_AGE=168
+      - EXECUTIONS_DATA_PRUNE_MAX_COUNT=500
       # Set in .env to the public https URL (e.g. an ngrok tunnel) that Meta
       # posts WhatsApp webhooks to.
       - WEBHOOK_URL=${WEBHOOK_URL:-http://localhost:5678/}

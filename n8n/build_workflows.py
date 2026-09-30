@@ -322,8 +322,15 @@ def build_router():
              {"respondWith": "text", "responseBody": "={{ $json.body }}", "options": {}},
              [240, 60], tv=TV["respond"]),
 
+        # Meta abandons a webhook call after ~20s and redelivers it. The work
+        # below (CDN download, Drive upload, PDF extraction, embedding, Sheets)
+        # routinely exceeds that, which produced duplicate executions and left
+        # n8n holding a response for a closed connection. Acknowledging on
+        # receipt is the documented pattern: the user's reply is sent through
+        # the send API, not the webhook response, so nothing is lost.
         node("WhatsApp Webhook", "webhook",
-             {"httpMethod": "POST", "path": "whatsapp-router", "responseMode": "responseNode", "options": {}},
+             {"httpMethod": "POST", "path": "whatsapp-router", "responseMode": "onReceived",
+              "options": {"responseCode": 200}},
              [-200, 420], tv=TV["webhook"], webhookId=str(uuid.uuid4())),
         node("Normalize Inbound", "code", {"jsCode": NORMALIZE_JS}, [20, 420], tv=TV["code"]),
         node("Is Message?", "if", {
@@ -339,11 +346,6 @@ def build_router():
             },
             "options": {},
         }, [130, 420], tv=TV["if"]),
-        node("Respond — Ignored", "respondToWebhook", {
-            "respondWith": "json",
-            "responseBody": '={{ JSON.stringify({ ignored: true, reason: "status callback, not a message" }) }}',
-            "options": {},
-        }, [350, 620], tv=TV["respond"]),
         node("Has Attachment?", "if", {
             "conditions": {
                 "options": {"caseSensitive": True, "typeValidation": "loose", "version": 2},
@@ -415,7 +417,6 @@ def build_router():
         whatsapp_reply("Reply — File Added",
                        "'Got it — I added *' + $('Normalize Inbound').first().json.filename + "
                        "'* to the knowledge base.'", [2000, 200]),
-        respond("Respond — Ingest", [2220, 200]),
     ]
 
     # --- text branch: classify then route ---
@@ -465,7 +466,6 @@ def build_router():
                        "? '\\n\\n_Sources: ' + $('Agent A — Ask').first().json.citations"
                        ".map(c => c.title).join(', ') + '_' : '')",
                        [1560, 140]),
-        respond("Respond — QA", [1780, 140]),
     ]
 
     # lead_capture
@@ -497,7 +497,6 @@ def build_router():
                        "? '\\n\\nStill missing: ' + $('Agent B — New Lead').first().json"
                        ".missingFields.join(', ') : '')",
                        [1560, 340]),
-        respond("Respond — Lead", [1780, 340]),
     ]
 
     # proposal_request
@@ -552,7 +551,6 @@ def build_router():
                        "'*\\n' + 'https://docs.google.com/document/d/' + "
                        "$('Copy Proposal Template').first().json.id + '/export?format=pdf'",
                        [2000, 540]),
-        respond("Respond — Proposal", [2220, 540]),
     ]
 
     # next_step — Agent A when the meeting is about a document, Agent B for deals
@@ -602,7 +600,6 @@ def build_router():
                        "|| $('Create Calendar Event').first().json.start) + "
                        "'\\n' + ($('Create Calendar Event').first().json.htmlLink || '')",
                        [2000, 760]),
-        respond("Respond — Next Step", [2220, 760]),
     ]
 
     # status_update
@@ -622,7 +619,6 @@ def build_router():
                        "'Updated to *' + $('Agent B — Status Classify').first().json.label + "
                        "'* — ' + $('Agent B — Status Classify').first().json.reasonSummary",
                        [1560, 960]),
-        respond("Respond — Status", [1780, 960]),
     ]
 
     # fallback: smalltalk / unknown
@@ -631,37 +627,34 @@ def build_router():
                        "\"I can answer questions about our documents, capture leads, draft \" + "
                        "\"proposals, schedule calls and update deal status. What do you need?\"",
                        [900, 1140]),
-        respond("Respond — Fallback", [1120, 1140]),
     ]
 
     connections = merge(
         chain("Meta Verify", "Verify Handler", "Respond Verify"),
         chain("WhatsApp Webhook", "Normalize Inbound", "Is Message?"),
-        fan("Is Message?", ["Has Attachment?", "Respond — Ignored"]),
+        fan("Is Message?", ["Has Attachment?", None]),   # status callbacks simply stop
         fan("Has Attachment?", ["Get Media URL", "Classify Intent"]),
         chain("Get Media URL", "Download Media", "Upload to Drive", "Extract Text",
               "Agent A — Ingest", "Conversations Row (Ingest)", "Log Conversation (Ingest)",
-              "Reply — File Added", "Respond — Ingest"),
+              "Reply — File Added"),
         chain("Classify Intent", "Route by Intent"),
         fan("Route by Intent", [
             "Agent A — Ask", "Agent B — New Lead", "Agent B — Proposal Copy",
             "Knowledge Context?", "Agent B — Status Classify", "Reply — Fallback",
         ]),
         chain("Agent A — Ask", "Conversations Row (QA)", "Log Conversation (QA)",
-              "Reply — Answer", "Respond — QA"),
+              "Reply — Answer"),
         chain("Agent B — New Lead", "CRM Row (Lead)", "Upsert CRM (Lead)",
-              "Reply — Lead", "Respond — Lead"),
+              "Reply — Lead"),
         chain("Agent B — Proposal Copy", "Copy Proposal Template", "Merge Proposal Fields",
-              "CRM Row (Proposal)", "Update CRM (Proposal)", "Reply — Proposal",
-              "Respond — Proposal"),
+              "CRM Row (Proposal)", "Update CRM (Proposal)", "Reply — Proposal"),
         fan("Knowledge Context?", ["Agent A — Followup Parse", "Agent B — Nextstep Parse"]),
         chain("Agent A — Followup Parse", "Create Calendar Event"),
         chain("Agent B — Nextstep Parse", "Create Calendar Event"),
         chain("Create Calendar Event", "CRM Row (Next Step)", "Update CRM (Next Step)",
-              "Reply — Scheduled", "Respond — Next Step"),
+              "Reply — Scheduled"),
         chain("Agent B — Status Classify", "CRM Row (Status)", "Update CRM (Status)",
-              "Reply — Status", "Respond — Status"),
-        chain("Reply — Fallback", "Respond — Fallback"),
+              "Reply — Status"),
     )
     return workflow("WhatsApp Router", nodes, connections)
 

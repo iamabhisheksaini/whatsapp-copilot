@@ -285,8 +285,16 @@ if (msg) {
 // downstream Sheets writes match on it instead of blindly appending.
 const requestId = messageId || `wa-${Date.now()}`;
 
+// WhatsApp also posts status callbacks (sent/delivered/read) to the same
+// webhook. They carry a `statuses` array and no message, so without this flag
+// they fall through to the fallback branch, fail to reply to an empty
+// recipient, and fire a spurious error alert for every message sent.
+const isMessage = Boolean(msg) && Boolean(from);
+
 return [{
   json: {
+    isMessage,
+    statusOnly: !isMessage && Array.isArray(value?.statuses),
     from, text, messageId, requestId,
     mediaId, mimeType, filename,
     hasAttachment: Boolean(mediaId),
@@ -318,6 +326,24 @@ def build_router():
              {"httpMethod": "POST", "path": "whatsapp-router", "responseMode": "responseNode", "options": {}},
              [-200, 420], tv=TV["webhook"], webhookId=str(uuid.uuid4())),
         node("Normalize Inbound", "code", {"jsCode": NORMALIZE_JS}, [20, 420], tv=TV["code"]),
+        node("Is Message?", "if", {
+            "conditions": {
+                "options": {"caseSensitive": True, "typeValidation": "loose", "version": 2},
+                "conditions": [{
+                    "id": "is-message",
+                    "leftValue": "={{ $json.isMessage }}",
+                    "rightValue": "true",
+                    "operator": {"type": "boolean", "operation": "true", "singleValue": True},
+                }],
+                "combinator": "and",
+            },
+            "options": {},
+        }, [130, 420], tv=TV["if"]),
+        node("Respond — Ignored", "respondToWebhook", {
+            "respondWith": "json",
+            "responseBody": '={{ JSON.stringify({ ignored: true, reason: "status callback, not a message" }) }}',
+            "options": {},
+        }, [350, 620], tv=TV["respond"]),
         node("Has Attachment?", "if", {
             "conditions": {
                 "options": {"caseSensitive": True, "typeValidation": "loose", "version": 2},
@@ -604,7 +630,8 @@ def build_router():
 
     connections = merge(
         chain("Meta Verify", "Verify Handler", "Respond Verify"),
-        chain("WhatsApp Webhook", "Normalize Inbound", "Has Attachment?"),
+        chain("WhatsApp Webhook", "Normalize Inbound", "Is Message?"),
+        fan("Is Message?", ["Has Attachment?", "Respond — Ignored"]),
         fan("Has Attachment?", ["Get Media URL", "Classify Intent"]),
         chain("Get Media URL", "Download Media", "Upload to Drive", "Extract Text",
               "Agent A — Ingest", "Conversations Row (Ingest)", "Log Conversation (Ingest)",

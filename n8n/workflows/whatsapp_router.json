@@ -16,7 +16,7 @@
         -200,
         60
       ],
-      "webhookId": "39995111-ef26-4b11-98fc-58375936e40d"
+      "webhookId": "316410bc-df4c-4312-98aa-26ce360d292c"
     },
     {
       "parameters": {
@@ -61,11 +61,11 @@
         -200,
         420
       ],
-      "webhookId": "68f5061d-dc29-4ae1-87c1-7755c6ed273f"
+      "webhookId": "b345b974-24a6-426b-8c5c-c6fb318d3e81"
     },
     {
       "parameters": {
-        "jsCode": "// Flatten whatever shape the request arrived in into one predictable object.\n//\n// Three shapes reach this node:\n//   1. Live Meta delivery  {object, entry:[{changes:[{field, value}]}]}\n//   2. Meta dashboard Test {field, value}   - no entry[] wrapper\n//   3. Local curl testing  {message, from, messageId}\n// Shape 2 is easy to miss: it silently falls through to the fallback branch and\n// looks like an intent-classification bug rather than a parsing one.\nconst body = $input.first().json.body ?? $input.first().json;\n\nlet text = '', from = '', messageId = '', mediaId = '', mimeType = '', filename = '';\n\n// Locate the \"value\" object regardless of how deeply it is wrapped.\nlet value = null;\ntry { value = body.entry[0].changes[0].value; } catch (e) { /* not shape 1 */ }\nif (!value && body.value && body.value.messages) value = body.value;   // shape 2\nif (!value && body.messages) value = body;                             // already unwrapped\n\nconst msg = value ? (value.messages || [])[0] : null;\n\nif (msg) {\n  from = msg.from || '';\n  messageId = msg.id || '';\n  if (msg.type === 'text') {\n    text = msg.text?.body || '';\n  } else if (['document', 'image', 'audio', 'video'].includes(msg.type)) {\n    const media = msg[msg.type] || {};\n    mediaId = media.id || '';\n    mimeType = media.mime_type || '';\n    filename = media.filename || `${msg.type}-${mediaId}`;\n    text = media.caption || '';\n  }\n} else {\n  // Shape 3, or a delivery-status callback with no message in it.\n  text = body.message || body.text || '';\n  from = body.from || '';\n  messageId = body.messageId || '';\n}\n\n// Meta retries deliveries; the message id is the natural idempotency key, so\n// downstream Sheets writes match on it instead of blindly appending.\nconst requestId = messageId || `wa-${Date.now()}`;\n\nreturn [{\n  json: {\n    from, text, messageId, requestId,\n    mediaId, mimeType, filename,\n    hasAttachment: Boolean(mediaId),\n    receivedAt: new Date().toISOString(),\n  }\n}];"
+        "jsCode": "// Flatten whatever shape the request arrived in into one predictable object.\n//\n// Three shapes reach this node:\n//   1. Live Meta delivery  {object, entry:[{changes:[{field, value}]}]}\n//   2. Meta dashboard Test {field, value}   - no entry[] wrapper\n//   3. Local curl testing  {message, from, messageId}\n// Shape 2 is easy to miss: it silently falls through to the fallback branch and\n// looks like an intent-classification bug rather than a parsing one.\nconst body = $input.first().json.body ?? $input.first().json;\n\nlet text = '', from = '', messageId = '', mediaId = '', mimeType = '', filename = '';\n\n// Locate the \"value\" object regardless of how deeply it is wrapped.\nlet value = null;\ntry { value = body.entry[0].changes[0].value; } catch (e) { /* not shape 1 */ }\nif (!value && body.value && body.value.messages) value = body.value;   // shape 2\nif (!value && body.messages) value = body;                             // already unwrapped\n\nconst msg = value ? (value.messages || [])[0] : null;\n\nif (msg) {\n  from = msg.from || '';\n  messageId = msg.id || '';\n  if (msg.type === 'text') {\n    text = msg.text?.body || '';\n  } else if (['document', 'image', 'audio', 'video'].includes(msg.type)) {\n    const media = msg[msg.type] || {};\n    mediaId = media.id || '';\n    mimeType = media.mime_type || '';\n    filename = media.filename || `${msg.type}-${mediaId}`;\n    text = media.caption || '';\n  }\n} else {\n  // Shape 3, or a delivery-status callback with no message in it.\n  text = body.message || body.text || '';\n  from = body.from || '';\n  messageId = body.messageId || '';\n}\n\n// Meta retries deliveries; the message id is the natural idempotency key, so\n// downstream Sheets writes match on it instead of blindly appending.\nconst requestId = messageId || `wa-${Date.now()}`;\n\n// WhatsApp also posts status callbacks (sent/delivered/read) to the same\n// webhook. They carry a `statuses` array and no message, so without this flag\n// they fall through to the fallback branch, fail to reply to an empty\n// recipient, and fire a spurious error alert for every message sent.\nconst isMessage = Boolean(msg) && Boolean(from);\n\nreturn [{\n  json: {\n    isMessage,\n    statusOnly: !isMessage && Array.isArray(value?.statuses),\n    from, text, messageId, requestId,\n    mediaId, mimeType, filename,\n    hasAttachment: Boolean(mediaId),\n    receivedAt: new Date().toISOString(),\n  }\n}];"
       },
       "id": "1c4d67b2-7f61-508f-8f56-9d4fd297177f",
       "name": "Normalize Inbound",
@@ -74,6 +74,54 @@
       "position": [
         20,
         420
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "is-message",
+              "leftValue": "={{ $json.isMessage }}",
+              "rightValue": "true",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "e4be1a98-b617-545f-bd4b-127cad46ed63",
+      "name": "Is Message?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        130,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ignored: true, reason: \"status callback, not a message\" }) }}",
+        "options": {}
+      },
+      "id": "7e312c5a-d729-5efe-b7d0-9bcf08aee271",
+      "name": "Respond — Ignored",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        350,
+        620
       ]
     },
     {
@@ -1598,7 +1646,25 @@
       "main": [
         [
           {
+            "node": "Is Message?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Message?": {
+      "main": [
+        [
+          {
             "node": "Has Attachment?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond — Ignored",
             "type": "main",
             "index": 0
           }

@@ -33,13 +33,13 @@ one place.
 ### Agent A — Knowledge
 
 ```
-Split ──▶ Embed ──▶ Persist                         (ingest)
+Ingest ──▶ Embed ──▶ Persist                        (ingest)
 
 Retrieve ──▶ Answer ──┬─(confident)────────────────▶ LogIntent
-                      └─▶ Reflect ─┬─(supported)───▶ LogIntent
-                                   └─▶ Revise ─────▶ LogIntent
+                      └─▶ SelfReflect ─┬─(ok)──────▶ LogIntent
+                                       └─▶ Revise ─▶ LogIntent
 
-ParseTime ──▶ Validate                              (follow-up)
+ScheduleIntent ──▶ Validate                         (follow-up)
 ```
 
 The self-reflection pass only runs when it can change the outcome: skipped when
@@ -49,11 +49,14 @@ the common case to one LLM call.
 ### Agent B — Dealflow
 
 ```
-Parse ──▶ Enrich ──▶ Score                (lead capture)
-ProposalCopy ──▶ ValidateCopy             (proposal)
-ParseTime ──▶ ValidateTime                (next step)
-ClassifyReason ──▶ ValidateStatus         (status)
+Parse ──▶ ValidateEnrich ──▶ Score ──▶ LogIntent   (lead capture)
+ProposalCopy ──▶ ValidateCopy                      (proposal)
+ScheduleIntent ──▶ ValidateTime                    (next step)
+StatusClassify ──▶ ValidateStatus                  (status)
 ```
+
+Node names match §3 of the brief, so the graphs read against the spec's node
+map directly. Full diagrams: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ### Shared intent classifier
 
@@ -113,16 +116,35 @@ inbound messages.
 ## Testing
 
 ```bash
-infra/.venv/bin/python -m pytest
+infra/.venv/bin/python -m pytest        # 99 tests
+infra/.venv/bin/ruff check .            # lint
 ```
 
-74 tests, no network access — the LLM and the vector store are both faked, so
+99 tests, no network access — the LLM and the vector store are both faked, so
 the suite runs in about a second.
 
 Covered: chunking and document identity, idempotent re-ingest, citation
 fallback, the reflection/revision branch, unparseable model output, budget
 normalisation, domain guessing, lead scoring, proposal validation, weekday
-correction, status coercion, and intent fallback.
+correction, and status coercion.
+
+`tests/test_intent_golden.py` holds the golden tests for intent classification
+and entity extraction: a table of messages with their expected route asserted
+exactly against the keyword layer (no LLM, fully deterministic), plus a
+schema contract checked for every one of the seven intents.
+
+### Metrics
+
+Both agents expose `GET /metrics` — the four measures the brief names:
+
+```bash
+curl -s localhost:8001/metrics   # files ingested, Q&A latency, retrieval hit rate
+curl -s localhost:8002/metrics   # lead funnel counts
+```
+
+Process-local counters returned as JSON, reset on restart. Deliberately not
+Prometheus: the call sites would be identical, and this keeps the demo
+dependency-free.
 
 ---
 
@@ -251,8 +273,10 @@ agents/
 n8n/
   build_workflows.py
   workflows/        whatsapp_router, drive_watch, nightly_reindex, error_channel
-tests/              74 tests
-docs/               GOOGLE_SETUP.md
+tests/              99 tests, incl. golden intent tests
+docs/               ARCHITECTURE.md (diagrams), GOOGLE_SETUP.md
+                    sequence-diagram.mmd, agentA-graph.mmd, agentB-graph.mmd
+ruff.toml
 data/chroma/        persisted vector store (gitignored)
 docker-compose.yml
 env.sample

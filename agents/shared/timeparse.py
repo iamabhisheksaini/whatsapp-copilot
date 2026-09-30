@@ -12,7 +12,6 @@ intent — and this only corrects the date component.
 
 import datetime as dt
 import re
-from typing import Optional
 
 WEEKDAYS = {
     "monday": 0, "mon": 0,
@@ -29,7 +28,7 @@ _WEEKDAY_RE = re.compile(
 )
 
 
-def mentioned_weekday(text: str) -> Optional[int]:
+def mentioned_weekday(text: str) -> int | None:
     """Return the weekday index named in the text, or None.
 
     Only acts on an unambiguous single mention — "Monday or Tuesday" is left
@@ -41,7 +40,7 @@ def mentioned_weekday(text: str) -> Optional[int]:
 
 
 def snap_to_weekday(
-    moment: dt.datetime, target: int, today: Optional[dt.date] = None
+    moment: dt.datetime, target: int, today: dt.date | None = None
 ) -> dt.datetime:
     """Shift `moment` to the nearest date matching `target`, keeping the time.
 
@@ -62,7 +61,7 @@ def snap_to_weekday(
 
 
 def correct_weekday(
-    start: dt.datetime, text: str, today: Optional[dt.date] = None
+    start: dt.datetime, text: str, today: dt.date | None = None
 ) -> tuple[dt.datetime, bool]:
     """Apply weekday correction if the message names one.
 

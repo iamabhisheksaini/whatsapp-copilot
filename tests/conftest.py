@@ -11,7 +11,7 @@ import importlib.util
 import sys
 import types
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 AGENTS = ROOT / "agents"
@@ -38,7 +38,7 @@ def _load_module(path: Path, name: str) -> types.ModuleType:
     return module
 
 
-def load_agent(package_dir: str) -> Dict[str, types.ModuleType]:
+def load_agent(package_dir: str) -> dict[str, types.ModuleType]:
     """Load one agent's tools/graph/app in dependency order.
 
     Returns the three modules. Each keeps a direct reference to the ones it
@@ -84,9 +84,9 @@ def fake_llm_factory(*responses: str):
 class FakeCollection:
     """In-memory stand-in for a Chroma collection."""
 
-    def __init__(self, hits: Dict[str, Any] | None = None):
-        self.upserts: list[Dict[str, Any]] = []
-        self.deletes: list[Dict[str, Any]] = []
+    def __init__(self, hits: dict[str, Any] | None = None):
+        self.upserts: list[dict[str, Any]] = []
+        self.deletes: list[dict[str, Any]] = []
         self._hits = hits or {"documents": [[]], "metadatas": [[]], "distances": [[]]}
 
     def upsert(self, **kwargs: Any) -> None:
@@ -95,5 +95,5 @@ class FakeCollection:
     def delete(self, **kwargs: Any) -> None:
         self.deletes.append(kwargs)
 
-    def query(self, **_kwargs: Any) -> Dict[str, Any]:
+    def query(self, **_kwargs: Any) -> dict[str, Any]:
         return self._hits

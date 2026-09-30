@@ -1,9 +1,9 @@
 """Agent B — Dealflow, as LangGraph state graphs.
 
-  LEAD_GRAPH     Parse -> Enrich -> Score
+  LEAD_GRAPH     Parse -> ValidateEnrich -> Score -> LogIntent
   PROPOSAL_GRAPH ProposalCopy -> ValidateCopy
-  NEXTSTEP_GRAPH ParseTime -> ValidateTime
-  STATUS_GRAPH   ClassifyReason -> ValidateStatus
+  NEXTSTEP_GRAPH ScheduleIntent -> ValidateTime
+  STATUS_GRAPH   StatusClassify -> ValidateStatus
 
 Agent B returns typed JSON and nothing else — n8n writes to Sheets, Drive and
 Calendar.
@@ -11,11 +11,12 @@ Calendar.
 
 import datetime as dt
 import os
-from typing import Any, Dict, List, Literal, Optional, TypedDict
-
-from langgraph.graph import END, StateGraph
+from typing import Any, Literal, TypedDict
 
 import tools
+from langgraph.graph import END, StateGraph
+
+from shared import metrics
 from shared.llm import get_llm, get_logger, safe_json
 from shared.timeparse import correct_weekday
 
@@ -44,8 +45,8 @@ REASON_CATEGORIES = [
 class LeadState(TypedDict, total=False):
     raw: str
     requestId: str
-    parsed: Dict[str, Any]
-    result: Dict[str, Any]
+    parsed: dict[str, Any]
+    result: dict[str, Any]
 
 
 LEAD_PROMPT = """Extract structured lead information from this sales note.
@@ -112,25 +113,40 @@ def _score_lead(state: LeadState) -> LeadState:
     return {"result": result}
 
 
+def _log_intent(state: LeadState) -> LeadState:
+    """Terminal node mirroring Agent A, so both graphs end on a logged outcome."""
+    result = state["result"]
+    metrics.incr("funnel_captured")
+    if not result.get("missingFields"):
+        metrics.incr("funnel_complete")
+    log.info(
+        f"lead captured for {result.get('company') or 'unknown company'}",
+        extra={"requestId": state.get("requestId"), "node": "LogIntent"},
+    )
+    return {}
+
+
 def _build_lead_graph():
     graph = StateGraph(LeadState)
     graph.add_node("Parse", _parse_lead)
-    graph.add_node("Enrich", _enrich_lead)
+    graph.add_node("ValidateEnrich", _enrich_lead)
     graph.add_node("Score", _score_lead)
+    graph.add_node("LogIntent", _log_intent)
     graph.set_entry_point("Parse")
-    graph.add_edge("Parse", "Enrich")
-    graph.add_edge("Enrich", "Score")
-    graph.add_edge("Score", END)
+    graph.add_edge("Parse", "ValidateEnrich")
+    graph.add_edge("ValidateEnrich", "Score")
+    graph.add_edge("Score", "LogIntent")
+    graph.add_edge("LogIntent", END)
     return graph.compile()
 
 
 # --- proposal copy -----------------------------------------------------------
 
 class ProposalState(TypedDict, total=False):
-    lead: Dict[str, Any]
+    lead: dict[str, Any]
     requestId: str
-    raw: Dict[str, Any]
-    result: Dict[str, Any]
+    raw: dict[str, Any]
+    result: dict[str, Any]
 
 
 PROPOSAL_PROMPT = """Write proposal copy for this lead.
@@ -180,6 +196,7 @@ def _validate_copy(state: ProposalState) -> ProposalState:
         "wordCount": len(str(summary).split()),
         "company": company,
     }
+    metrics.incr("funnel_proposal_sent")
     log.info(
         "proposal copy generated",
         extra={"requestId": state.get("requestId"), "node": "ValidateCopy"},
@@ -202,8 +219,8 @@ def _build_proposal_graph():
 class NextStepState(TypedDict, total=False):
     text: str
     requestId: str
-    raw: Dict[str, Any]
-    result: Dict[str, Any]
+    raw: dict[str, Any]
+    result: dict[str, Any]
 
 
 NEXTSTEP_PROMPT = """Extract a calendar event from this sales message.
@@ -279,10 +296,10 @@ def _validate_next_step(state: NextStepState) -> NextStepState:
 
 def _build_nextstep_graph():
     graph = StateGraph(NextStepState)
-    graph.add_node("ParseTime", _parse_next_step)
+    graph.add_node("ScheduleIntent", _parse_next_step)
     graph.add_node("ValidateTime", _validate_next_step)
-    graph.set_entry_point("ParseTime")
-    graph.add_edge("ParseTime", "ValidateTime")
+    graph.set_entry_point("ScheduleIntent")
+    graph.add_edge("ScheduleIntent", "ValidateTime")
     graph.add_edge("ValidateTime", END)
     return graph.compile()
 
@@ -291,10 +308,10 @@ def _build_nextstep_graph():
 
 class StatusState(TypedDict, total=False):
     label: str
-    reasonText: Optional[str]
+    reasonText: str | None
     requestId: str
-    raw: Dict[str, Any]
-    result: Dict[str, Any]
+    raw: dict[str, Any]
+    result: dict[str, Any]
 
 
 STATUS_PROMPT = """Categorise why a deal reached this status.
@@ -342,6 +359,7 @@ def _validate_status(state: StatusState) -> StatusState:
         tools.clean_text(state.get("reasonText"), limit=300) or ""
     )
 
+    metrics.incr(f"funnel_{label.lower().replace(' ', '_')}")
     log.info(
         f"status {label}/{category}",
         extra={"requestId": state.get("requestId"), "node": "ValidateStatus"},
@@ -357,10 +375,10 @@ def _validate_status(state: StatusState) -> StatusState:
 
 def _build_status_graph():
     graph = StateGraph(StatusState)
-    graph.add_node("ClassifyReason", _classify_reason)
+    graph.add_node("StatusClassify", _classify_reason)
     graph.add_node("ValidateStatus", _validate_status)
-    graph.set_entry_point("ClassifyReason")
-    graph.add_edge("ClassifyReason", "ValidateStatus")
+    graph.set_entry_point("StatusClassify")
+    graph.add_edge("StatusClassify", "ValidateStatus")
     graph.add_edge("ValidateStatus", END)
     return graph.compile()
 
@@ -373,21 +391,21 @@ STATUS_GRAPH = _build_status_graph()
 
 # --- entry points used by app.py --------------------------------------------
 
-def process_new_lead(raw: str, requestId: str = "") -> Dict[str, Any]:
+def process_new_lead(raw: str, requestId: str = "") -> dict[str, Any]:
     return LEAD_GRAPH.invoke({"raw": raw, "requestId": requestId})["result"]
 
 
-def generate_proposal_copy(lead: Dict[str, Any], requestId: str = "") -> Dict[str, Any]:
+def generate_proposal_copy(lead: dict[str, Any], requestId: str = "") -> dict[str, Any]:
     return PROPOSAL_GRAPH.invoke({"lead": lead, "requestId": requestId})["result"]
 
 
-def parse_next_step(text: str, requestId: str = "") -> Dict[str, Any]:
+def parse_next_step(text: str, requestId: str = "") -> dict[str, Any]:
     return NEXTSTEP_GRAPH.invoke({"text": text, "requestId": requestId})["result"]
 
 
 def classify_status(
-    label: str, reasonText: Optional[str] = None, requestId: str = ""
-) -> Dict[str, Any]:
+    label: str, reasonText: str | None = None, requestId: str = ""
+) -> dict[str, Any]:
     return STATUS_GRAPH.invoke(
         {"label": label, "reasonText": reasonText, "requestId": requestId}
     )["result"]

@@ -6,7 +6,7 @@ covered by fast unit tests.
 """
 
 import re
-from typing import Any, Dict, Optional, Tuple
+from typing import Any
 
 # Suffixes to strip before turning a company name into a domain.
 _LEGAL_SUFFIXES = (
@@ -36,7 +36,7 @@ _CURRENCY_SYMBOLS = {
 }
 
 
-def guess_company_domain(company: Optional[str]) -> Optional[str]:
+def guess_company_domain(company: str | None) -> str | None:
     """Best-effort domain from a company name.
 
     A guess, not a lookup — Agent B does no network calls. n8n or a human can
@@ -59,11 +59,11 @@ def guess_company_domain(company: Optional[str]) -> Optional[str]:
     return "".join(words) + ".com"
 
 
-def normalize_budget(budget: Any) -> Tuple[Optional[float], Optional[str], Optional[str]]:
+def normalize_budget(budget: Any) -> tuple[float | None, str | None, str | None]:
     """Return (amount, currency, originalText) from free text like "~10k" or "$50,000"."""
     if budget is None:
         return None, None, None
-    if isinstance(budget, (int, float)):
+    if isinstance(budget, int | float):
         return float(budget), None, str(budget)
 
     text = str(budget).strip()
@@ -100,7 +100,7 @@ _SCORE_WEIGHTS = {
 }
 
 
-def score_lead(lead: Dict[str, Any]) -> Tuple[float, list]:
+def score_lead(lead: dict[str, Any]) -> tuple[float, list]:
     """Score 0..1 on completeness, plus the list of fields still missing.
 
     n8n uses `missingFields` to ask a targeted follow-up question ("what's the
@@ -116,7 +116,7 @@ def score_lead(lead: Dict[str, Any]) -> Tuple[float, list]:
     return round(score, 2), missing
 
 
-def clean_text(value: Any, limit: int = 2000) -> Optional[str]:
+def clean_text(value: Any, limit: int = 2000) -> str | None:
     """Strip HTML tags and clamp length — basic input sanitisation."""
     if value is None:
         return None

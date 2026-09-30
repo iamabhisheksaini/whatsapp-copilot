@@ -57,7 +57,7 @@ def node(name, type_, params, pos, tv=1, **extra):
 def chain(*names):
     """Wire a straight line of nodes: a -> b -> c."""
     links = {}
-    for src, dst in zip(names, names[1:]):
+    for src, dst in zip(names, names[1:], strict=False):
         links.setdefault(src, {"main": [[]]})["main"][0].append(
             {"node": dst, "type": "main", "index": 0}
         )

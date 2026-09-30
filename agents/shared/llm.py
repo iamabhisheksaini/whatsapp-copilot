@@ -10,7 +10,7 @@ import logging
 import os
 import re
 import sys
-from typing import Any, Dict, Optional
+from typing import Any
 
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
@@ -65,7 +65,7 @@ def get_logger(name: str) -> logging.Logger:
 
 # --- model factories ---------------------------------------------------------
 
-def get_llm(temperature: float = 0.0, model: Optional[str] = None) -> ChatOpenAI:
+def get_llm(temperature: float = 0.0, model: str | None = None) -> ChatOpenAI:
     """Chat model. Temperature 0 by default: these graphs want determinism."""
     if not OPENAI_API_KEY:
         raise RuntimeError("OPENAI_API_KEY is not set")
@@ -92,7 +92,7 @@ def get_embeddings() -> OpenAIEmbeddings:
 _FENCE = re.compile(r"^```(?:json)?\s*|\s*```$", re.MULTILINE)
 
 
-def safe_json(content: str) -> Dict[str, Any]:
+def safe_json(content: str) -> dict[str, Any]:
     """Parse an LLM reply as JSON, tolerating code fences and stray prose.
 
     Returns `{"_raw": content}` when nothing parseable is found, so callers can

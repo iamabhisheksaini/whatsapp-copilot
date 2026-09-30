@@ -6,7 +6,7 @@ swap the store for an in-memory fake.
 
 import hashlib
 import os
-from typing import Any, Dict, List, Optional, Protocol
+from typing import Any, Protocol
 
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
@@ -31,7 +31,7 @@ class VectorStore(Protocol):
     def delete(self, **kwargs: Any) -> Any: ...
 
 
-_collection: Optional[VectorStore] = None
+_collection: VectorStore | None = None
 
 
 def get_collection() -> VectorStore:
@@ -56,7 +56,7 @@ def set_collection(collection: VectorStore) -> None:
     _collection = collection
 
 
-def document_key(filename: str, drive_file_id: Optional[str] = None) -> str:
+def document_key(filename: str, drive_file_id: str | None = None) -> str:
     """Stable identity for a source document.
 
     Prefer the Drive file id — a file renamed in Drive is still the same
@@ -67,15 +67,15 @@ def document_key(filename: str, drive_file_id: Optional[str] = None) -> str:
     return hashlib.sha256(basis.encode("utf-8")).hexdigest()[:16]
 
 
-def split(text: str) -> List[str]:
+def split(text: str) -> list[str]:
     return [c for c in splitter.split_text(text) if c.strip()]
 
 
-def embed_documents(chunks: List[str]) -> List[List[float]]:
+def embed_documents(chunks: list[str]) -> list[list[float]]:
     return get_embeddings().embed_documents(chunks)
 
 
-def embed_query(text: str) -> List[float]:
+def embed_query(text: str) -> list[float]:
     return get_embeddings().embed_query(text)
 
 
@@ -90,9 +90,9 @@ def purge_document(doc_key: str) -> None:
 def persist_chunks(
     doc_key: str,
     filename: str,
-    chunks: List[str],
-    vectors: List[List[float]],
-    metadata: Dict[str, Any],
+    chunks: list[str],
+    vectors: list[list[float]],
+    metadata: dict[str, Any],
 ) -> None:
     ids = [f"{doc_key}-{i}" for i in range(len(chunks))]
     metas = [
@@ -110,7 +110,7 @@ def persist_chunks(
     )
 
 
-def retrieve(query_vector: List[float], k: int = 4) -> List[Dict[str, Any]]:
+def retrieve(query_vector: list[float], k: int = 4) -> list[dict[str, Any]]:
     results = get_collection().query(
         query_embeddings=[query_vector],
         n_results=k,
@@ -121,11 +121,11 @@ def retrieve(query_vector: List[float], k: int = 4) -> List[Dict[str, Any]]:
     distances = (results.get("distances") or [[]])[0]
 
     hits = []
-    for doc, meta, dist in zip(documents, metadatas, distances):
+    for doc, meta, dist in zip(documents, metadatas, distances, strict=False):
         hits.append({"document": doc, "metadata": meta or {}, "distance": dist})
     return hits
 
 
-def estimate_tokens(chunks: List[str]) -> int:
+def estimate_tokens(chunks: list[str]) -> int:
     """Rough token count (~4 chars/token). Good enough for reporting."""
     return sum(len(c) for c in chunks) // 4

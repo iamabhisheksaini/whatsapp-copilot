@@ -9,7 +9,7 @@ Graph: Normalize -> Classify (LLM) -> Validate (schema + heuristic fallback)
 """
 
 import datetime as dt
-from typing import Any, Dict, List, Literal, Optional, TypedDict
+from typing import Any, Literal, TypedDict
 
 from langgraph.graph import END, StateGraph
 from pydantic import BaseModel, Field
@@ -38,14 +38,14 @@ Context = Literal["knowledge", "dealflow"]
 class Entities(BaseModel):
     """Loosely-typed entity bag; every field is optional by design."""
 
-    person: Optional[str] = None
-    company: Optional[str] = None
-    datetimeText: Optional[str] = Field(
+    person: str | None = None
+    company: str | None = None
+    datetimeText: str | None = Field(
         default=None, description="Raw date/time phrase as written by the user"
     )
-    budget: Optional[str] = None
-    topic: Optional[str] = None
-    statusLabel: Optional[Literal["Won", "Lost", "On hold"]] = None
+    budget: str | None = None
+    topic: str | None = None
+    statusLabel: Literal["Won", "Lost", "On hold"] | None = None
 
 
 class IntentResult(BaseModel):
@@ -58,9 +58,9 @@ class IntentResult(BaseModel):
 class IntentState(TypedDict, total=False):
     text: str
     requestId: str
-    recentContext: Dict[str, Any]
-    raw: Dict[str, Any]
-    result: Dict[str, Any]
+    recentContext: dict[str, Any]
+    raw: dict[str, Any]
+    result: dict[str, Any]
 
 
 SYSTEM_PROMPT = """You classify inbound WhatsApp messages for a sales copilot.
@@ -125,7 +125,7 @@ def _classify(state: IntentState) -> IntentState:
 
 # Ordered most-specific first: a message mentioning both "lost" and "budget"
 # is a status update, not a new lead.
-_HEURISTICS: List[tuple[str, tuple[str, ...]]] = [
+_HEURISTICS: list[tuple[str, tuple[str, ...]]] = [
     ("status_update", ("we lost", "we won", "on hold", "deal is dead", "closed won", "closed lost")),
     ("proposal_request", ("proposal", "quote", "draft a", "sow", "statement of work")),
     ("next_step", ("schedule", "set up a call", "book a", "demo on", "meeting on", "let's set")),
@@ -133,7 +133,7 @@ _HEURISTICS: List[tuple[str, tuple[str, ...]]] = [
 ]
 
 
-def _heuristic_intent(text: str) -> Optional[str]:
+def _heuristic_intent(text: str) -> str | None:
     lowered = text.lower()
     for intent, needles in _HEURISTICS:
         if any(n in lowered for n in needles):
@@ -197,8 +197,8 @@ INTENT_GRAPH = _build_graph()
 
 
 def classify_intent(
-    text: str, request_id: str, recent_context: Optional[Dict[str, Any]] = None
-) -> Dict[str, Any]:
+    text: str, request_id: str, recent_context: dict[str, Any] | None = None
+) -> dict[str, Any]:
     final = INTENT_GRAPH.invoke(
         {"text": text, "requestId": request_id, "recentContext": recent_context or {}}
     )

@@ -2,9 +2,9 @@
 
 Three compiled graphs, one per endpoint:
 
-  INGEST_GRAPH   Split -> Embed -> Persist
-  ASK_GRAPH      Retrieve -> Answer -> (Reflect -> Revise) -> LogIntent
-  FOLLOWUP_GRAPH ParseTime -> Validate
+  INGEST_GRAPH   Ingest -> Embed -> Persist
+  ASK_GRAPH      Retrieve -> Answer -> (SelfReflect -> Revise) -> LogIntent
+  FOLLOWUP_GRAPH ScheduleIntent -> Validate
 
 Agent A never touches Google or WhatsApp; n8n owns every side effect. The only
 external systems here are the LLM provider and the vector store.
@@ -12,11 +12,12 @@ external systems here are the LLM provider and the vector store.
 
 import datetime as dt
 import os
-from typing import Any, Dict, List, Optional, TypedDict
-
-from langgraph.graph import END, StateGraph
+from typing import Any, TypedDict
 
 import tools
+from langgraph.graph import END, StateGraph
+
+from shared import metrics
 from shared.llm import get_llm, get_logger, safe_json
 from shared.timeparse import correct_weekday
 
@@ -33,13 +34,13 @@ REFLECT_ENABLED = os.getenv("SELF_REFLECT", "true").lower() == "true"
 class IngestState(TypedDict, total=False):
     text: str
     filename: str
-    driveFileId: Optional[str]
-    metadata: Dict[str, Any]
+    driveFileId: str | None
+    metadata: dict[str, Any]
     requestId: str
     docKey: str
-    chunks: List[str]
-    vectors: List[List[float]]
-    result: Dict[str, Any]
+    chunks: list[str]
+    vectors: list[list[float]]
+    result: dict[str, Any]
 
 
 def _split_node(state: IngestState) -> IngestState:
@@ -49,7 +50,7 @@ def _split_node(state: IngestState) -> IngestState:
     doc_key = tools.document_key(state["filename"], state.get("driveFileId"))
     log.info(
         f"split into {len(chunks)} chunks",
-        extra={"requestId": state.get("requestId"), "node": "Split"},
+        extra={"requestId": state.get("requestId"), "node": "Ingest"},
     )
     return {"chunks": chunks, "docKey": doc_key}
 
@@ -66,7 +67,7 @@ def _persist_node(state: IngestState) -> IngestState:
     metadata = {
         **(state.get("metadata") or {}),
         "driveFileId": state.get("driveFileId"),
-        "ingestedAt": dt.datetime.now(dt.timezone.utc).isoformat(),
+        "ingestedAt": dt.datetime.now(dt.UTC).isoformat(),
     }
     tools.persist_chunks(
         doc_key, state["filename"], state["chunks"], state["vectors"], metadata
@@ -76,6 +77,8 @@ def _persist_node(state: IngestState) -> IngestState:
         "tokens": tools.estimate_tokens(state["chunks"]),
         "docKey": doc_key,
     }
+    metrics.incr("files_ingested")
+    metrics.incr("chunks_ingested", len(state["chunks"]))
     log.info(
         "persisted",
         extra={"requestId": state.get("requestId"), "node": "Persist"},
@@ -85,11 +88,11 @@ def _persist_node(state: IngestState) -> IngestState:
 
 def _build_ingest_graph():
     graph = StateGraph(IngestState)
-    graph.add_node("Split", _split_node)
+    graph.add_node("Ingest", _split_node)
     graph.add_node("Embed", _embed_node)
     graph.add_node("Persist", _persist_node)
-    graph.set_entry_point("Split")
-    graph.add_edge("Split", "Embed")
+    graph.set_entry_point("Ingest")
+    graph.add_edge("Ingest", "Embed")
     graph.add_edge("Embed", "Persist")
     graph.add_edge("Persist", END)
     return graph.compile()
@@ -101,13 +104,13 @@ class AskState(TypedDict, total=False):
     userId: str
     text: str
     requestId: str
-    hits: List[Dict[str, Any]]
+    hits: list[dict[str, Any]]
     answer: str
-    citations: List[Dict[str, Any]]
+    citations: list[dict[str, Any]]
     confidence: float
     critique: str
     revised: bool
-    result: Dict[str, Any]
+    result: dict[str, Any]
 
 
 ANSWER_PROMPT = """You are a knowledge assistant answering from company documents.
@@ -169,14 +172,14 @@ Return ONLY JSON:
 """
 
 
-def _format_context(hits: List[Dict[str, Any]]) -> str:
+def _format_context(hits: list[dict[str, Any]]) -> str:
     return "\n\n".join(
         f"[Source: {h['metadata'].get('filename', 'unknown')}]\n{h['document']}"
         for h in hits
     )
 
 
-def _citations_from_hits(hits: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def _citations_from_hits(hits: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Deduplicated citations in retrieval order."""
     seen, citations = set(), []
     for hit in hits:
@@ -190,8 +193,12 @@ def _citations_from_hits(hits: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 
 
 def _retrieve_node(state: AskState) -> AskState:
-    vector = tools.embed_query(state["text"])
-    hits = tools.retrieve(vector, k=int(os.getenv("RETRIEVE_K", "4")))
+    with metrics.timed("retrieve"):
+        vector = tools.embed_query(state["text"])
+        hits = tools.retrieve(vector, k=int(os.getenv("RETRIEVE_K", "4")))
+    metrics.incr("ask_total")
+    if hits:
+        metrics.incr("ask_with_hits")
     log.info(
         f"retrieved {len(hits)} chunks",
         extra={"requestId": state.get("requestId"), "node": "Retrieve"},
@@ -312,6 +319,10 @@ def _log_intent_node(state: AskState) -> AskState:
         "lowConfidence": confidence < CONFIDENCE_FLOOR,
         "revised": bool(state.get("revised")),
     }
+    if result["lowConfidence"]:
+        metrics.incr("ask_low_confidence")
+    if result["revised"]:
+        metrics.incr("ask_revised")
     log.info(
         f"answered (confidence={confidence:.2f})",
         extra={"requestId": state.get("requestId"), "node": "LogIntent"},
@@ -323,17 +334,17 @@ def _build_ask_graph():
     graph = StateGraph(AskState)
     graph.add_node("Retrieve", _retrieve_node)
     graph.add_node("Answer", _answer_node)
-    graph.add_node("Reflect", _reflect_node)
+    graph.add_node("SelfReflect", _reflect_node)
     graph.add_node("Revise", _revise_node)
     graph.add_node("LogIntent", _log_intent_node)
 
     graph.set_entry_point("Retrieve")
     graph.add_edge("Retrieve", "Answer")
     graph.add_conditional_edges(
-        "Answer", _should_reflect, {"reflect": "Reflect", "skip": "LogIntent"}
+        "Answer", _should_reflect, {"reflect": "SelfReflect", "skip": "LogIntent"}
     )
     graph.add_conditional_edges(
-        "Reflect", _needs_revision, {"revise": "Revise", "done": "LogIntent"}
+        "SelfReflect", _needs_revision, {"revise": "Revise", "done": "LogIntent"}
     )
     graph.add_edge("Revise", "LogIntent")
     graph.add_edge("LogIntent", END)
@@ -345,8 +356,8 @@ def _build_ask_graph():
 class FollowupState(TypedDict, total=False):
     text: str
     requestId: str
-    raw: Dict[str, Any]
-    result: Dict[str, Any]
+    raw: dict[str, Any]
+    result: dict[str, Any]
 
 
 FOLLOWUP_PROMPT = """Extract a calendar event from this message.
@@ -426,10 +437,10 @@ def _validate_time_node(state: FollowupState) -> FollowupState:
 
 def _build_followup_graph():
     graph = StateGraph(FollowupState)
-    graph.add_node("ParseTime", _parse_time_node)
+    graph.add_node("ScheduleIntent", _parse_time_node)
     graph.add_node("Validate", _validate_time_node)
-    graph.set_entry_point("ParseTime")
-    graph.add_edge("ParseTime", "Validate")
+    graph.set_entry_point("ScheduleIntent")
+    graph.add_edge("ScheduleIntent", "Validate")
     graph.add_edge("Validate", END)
     return graph.compile()
 
@@ -444,10 +455,10 @@ FOLLOWUP_GRAPH = _build_followup_graph()
 def run_ingest(
     text: str,
     filename: str,
-    metadata: Optional[Dict[str, Any]],
+    metadata: dict[str, Any] | None,
     requestId: str,
-    driveFileId: Optional[str] = None,
-) -> Dict[str, Any]:
+    driveFileId: str | None = None,
+) -> dict[str, Any]:
     final = INGEST_GRAPH.invoke(
         {
             "text": text,
@@ -460,13 +471,13 @@ def run_ingest(
     return final["result"]
 
 
-def run_ask(user_id: str, text: str, requestId: str) -> Dict[str, Any]:
+def run_ask(user_id: str, text: str, requestId: str) -> dict[str, Any]:
     final = ASK_GRAPH.invoke(
         {"userId": user_id, "text": text, "requestId": requestId}
     )
     return final["result"]
 
 
-def run_followup_parse(text: str, requestId: str) -> Dict[str, Any]:
+def run_followup_parse(text: str, requestId: str) -> dict[str, Any]:
     final = FOLLOWUP_GRAPH.invoke({"text": text, "requestId": requestId})
     return final["result"]

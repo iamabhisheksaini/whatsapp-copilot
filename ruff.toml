@@ -1,0 +1,27 @@
+# Linting for the agent code (§7: "Python type hints + linting").
+#   ruff check .
+#   ruff format --check .
+
+line-length = 100
+target-version = "py311"
+
+[lint]
+select = [
+    "E",    # pycodestyle
+    "F",    # pyflakes
+    "I",    # import sorting
+    "B",    # bugbear
+    "UP",   # pyupgrade
+    "SIM",  # simplify
+]
+ignore = [
+    "E501",  # long lines are handled by the formatter
+    "B008",  # FastAPI's Depends()/Field() defaults are the documented idiom
+]
+
+[lint.per-file-ignores]
+# Tests deliberately import modules by path and reassign globals.
+"tests/*" = ["E402", "F811"]
+
+[lint.isort]
+known-first-party = ["shared"]

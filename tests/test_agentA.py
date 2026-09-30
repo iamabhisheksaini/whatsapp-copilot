@@ -3,9 +3,8 @@
 import json
 
 import pytest
-from fastapi.testclient import TestClient
-
 from conftest import FakeCollection, fake_llm_factory, load_agent
+from fastapi.testclient import TestClient
 
 A = load_agent("agentA_knowledge")
 tools, graph, app_module = A["tools"], A["graph"], A["app"]

@@ -1,0 +1,16 @@
+flowchart LR
+  subgraph LEAD_GRAPH
+    L1[Parse] --> L2[ValidateEnrich<br/>domain guess, budget normalise] --> L3[Score<br/>qualityScore + missingFields] --> L4[LogIntent]
+  end
+
+  subgraph PROPOSAL_GRAPH
+    P1[ProposalCopy] --> P2[ValidateCopy<br/>title, summary, 3-5 bullets]
+  end
+
+  subgraph NEXTSTEP_GRAPH
+    N1[ScheduleIntent] --> N2[ValidateTime<br/>weekday correction]
+  end
+
+  subgraph STATUS_GRAPH
+    S1[StatusClassify] --> S2[ValidateStatus<br/>fixed reason vocabulary]
+  end

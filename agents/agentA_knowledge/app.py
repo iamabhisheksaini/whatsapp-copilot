@@ -10,13 +10,14 @@ Every response carries a requestId for tracing across n8n and the agent logs.
 
 import time
 import uuid
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
+from graph import run_ask, run_followup_parse, run_ingest
 from pydantic import BaseModel, Field
 
-from graph import run_ask, run_followup_parse, run_ingest
+from shared import metrics
 from shared.llm import get_logger
 
 log = get_logger("agentA.app")
@@ -29,8 +30,8 @@ app = FastAPI(title="Agent A — Knowledge", version="1.0.0")
 class IngestIn(BaseModel):
     filename: str
     text: str = Field(min_length=1, description="Plain text extracted by n8n")
-    driveFileId: Optional[str] = None
-    metadata: Optional[Dict[str, Any]] = None
+    driveFileId: str | None = None
+    metadata: dict[str, Any] | None = None
 
 
 class IngestOut(BaseModel):
@@ -47,13 +48,13 @@ class AskIn(BaseModel):
 
 class Citation(BaseModel):
     title: str
-    driveFileId: Optional[str] = None
-    pageRanges: Optional[str] = None
+    driveFileId: str | None = None
+    pageRanges: str | None = None
 
 
 class AskOut(BaseModel):
     answer: str
-    citations: List[Citation]
+    citations: list[Citation]
     confidence: float
     lowConfidence: bool
     revised: bool
@@ -67,8 +68,8 @@ class FollowupIn(BaseModel):
 class FollowupOut(BaseModel):
     title: str
     startISO: str
-    endISO: Optional[str] = None
-    attendees: List[str] = []
+    endISO: str | None = None
+    attendees: list[str] = []
     weekdayCorrected: bool = False
     requestId: str
 
@@ -109,8 +110,15 @@ def _fail(request_id: str, where: str, exc: Exception) -> JSONResponse:
 
 # --- routes ------------------------------------------------------------------
 
+@app.get("/metrics")
+def get_metrics() -> dict[str, Any]:
+    """Counters for the metrics named in the brief: ingested files, Q&A
+    latency, retrieval hit rate and lead funnel counts."""
+    return {"agent": "agentA", **metrics.snapshot()}
+
+
 @app.get("/health")
-def health() -> Dict[str, str]:
+def health() -> dict[str, str]:
     return {"status": "ok", "agent": "agentA"}
 
 

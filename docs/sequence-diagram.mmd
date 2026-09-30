@@ -1,0 +1,49 @@
+sequenceDiagram
+  participant WA as WhatsApp (User)
+  participant N8 as n8n Orchestrator
+  participant A as Agent A (Knowledge, LangGraph)
+  participant B as Agent B (Dealflow, LangGraph)
+  participant G as Google APIs (Drive/Sheets/Calendar)
+  participant VS as Vector Store (Chroma)
+
+  WA->>N8: inbound message (text and/or file)
+  N8-->>WA: 200 acknowledged immediately
+  Note over N8: Meta abandons a webhook after ~20s,<br/>so the work runs after the ack
+  alt status callback (delivered/read)
+    N8->>N8: ignored, no further work
+  else has file
+    N8->>G: save to Drive:/KnowledgeBase/**
+    N8->>N8: extract PDF text
+    N8->>A: POST /agentA/ingest {driveFileId, filename, text}
+    A->>VS: Ingest -> Embed -> Persist
+    A-->>N8: {chunks, tokens, docKey}
+    N8->>G: append Conversations row
+    N8->>WA: confirmation
+  else text only
+    N8->>B: POST /classify {text}
+    B-->>N8: {intent, context, entities, confidence}
+    alt intent == knowledge_qa
+      N8->>A: POST /agentA/ask {userId, text}
+      A->>VS: Retrieve
+      A->>A: Answer -> SelfReflect -> Revise -> LogIntent
+      A-->>N8: {answer, citations[], confidence}
+      N8->>G: append Conversations row
+      N8->>WA: grounded answer + citations
+    else intent == next_step
+      alt context == knowledge
+        N8->>A: POST /agentA/followup-parse {text}
+        A-->>N8: {title, startISO, endISO, attendees}
+      else context == dealflow
+        N8->>B: POST /agentB/nextstep-parse {text}
+        B-->>N8: {title, startISO, endISO}
+      end
+      N8->>G: create Calendar event
+      N8->>G: update CRM NextStepDate
+      N8->>WA: confirmation + link
+    else intent in {lead_capture, proposal_request, status_update}
+      N8->>B: matching endpoint with normalized payload
+      B-->>N8: typed JSON result
+      N8->>G: Sheets / Drive / Calendar side effects
+      N8->>WA: confirmation + links
+    end
+  end

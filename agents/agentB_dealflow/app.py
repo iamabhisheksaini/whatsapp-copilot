@@ -12,18 +12,19 @@ calls first to route every text-only inbound message.
 
 import time
 import uuid
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Literal
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
-
 from graph import (
     classify_status,
     generate_proposal_copy,
     parse_next_step,
     process_new_lead,
 )
+from pydantic import BaseModel, Field
+
+from shared import metrics
 from shared.intent import classify_intent
 from shared.llm import get_logger
 
@@ -36,13 +37,13 @@ app = FastAPI(title="Agent B — Dealflow", version="1.0.0")
 
 class ClassifyIn(BaseModel):
     text: str = Field(min_length=1)
-    recentContext: Optional[Dict[str, Any]] = None
+    recentContext: dict[str, Any] | None = None
 
 
 class ClassifyOut(BaseModel):
     intent: str
     context: str
-    entities: Dict[str, Any]
+    entities: dict[str, Any]
     confidence: float
     fallbackUsed: bool
     requestId: str
@@ -53,30 +54,30 @@ class LeadIn(BaseModel):
 
 
 class LeadOut(BaseModel):
-    name: Optional[str] = None
-    company: Optional[str] = None
-    intent: Optional[str] = None
-    budget: Optional[str] = None
-    budgetAmount: Optional[float] = None
-    budgetCurrency: Optional[str] = None
-    timeline: Optional[str] = None
-    normalizedCompanyDomain: Optional[str] = None
+    name: str | None = None
+    company: str | None = None
+    intent: str | None = None
+    budget: str | None = None
+    budgetAmount: float | None = None
+    budgetCurrency: str | None = None
+    timeline: str | None = None
+    normalizedCompanyDomain: str | None = None
     qualityScore: float
-    missingFields: List[str]
-    notes: Optional[str] = None
+    missingFields: list[str]
+    notes: str | None = None
     requestId: str
 
 
 class ProposalIn(BaseModel):
-    lead: Dict[str, Any]
+    lead: dict[str, Any]
 
 
 class ProposalOut(BaseModel):
     title: str
     summaryBlurb: str
-    bulletPoints: List[str]
+    bulletPoints: list[str]
     wordCount: int
-    company: Optional[str] = None
+    company: str | None = None
     requestId: str
 
 
@@ -87,14 +88,14 @@ class NextStepIn(BaseModel):
 class NextStepOut(BaseModel):
     title: str
     startISO: str
-    endISO: Optional[str] = None
+    endISO: str | None = None
     weekdayCorrected: bool = False
     requestId: str
 
 
 class StatusIn(BaseModel):
     label: Literal["Won", "Lost", "On hold"]
-    reasonText: Optional[str] = None
+    reasonText: str | None = None
 
 
 class StatusOut(BaseModel):
@@ -134,8 +135,15 @@ def _fail(request_id: str, where: str, exc: Exception) -> JSONResponse:
 
 # --- routes ------------------------------------------------------------------
 
+@app.get("/metrics")
+def get_metrics() -> dict[str, Any]:
+    """Counters for the metrics named in the brief: ingested files, Q&A
+    latency, retrieval hit rate and lead funnel counts."""
+    return {"agent": "agentB", **metrics.snapshot()}
+
+
 @app.get("/health")
-def health() -> Dict[str, str]:
+def health() -> dict[str, str]:
     return {"status": "ok", "agent": "agentB"}
 
 

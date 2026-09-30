@@ -1,0 +1,18 @@
+flowchart LR
+  subgraph INGEST_GRAPH
+    I1[Ingest: split text] --> I2[Embed] --> I3[Persist in Chroma]
+  end
+
+  subgraph ASK_GRAPH
+    Q1[Retrieve] --> Q2[Answer]
+    Q2 -->|confidence >= 0.9<br/>or no hits| Q5[LogIntent]
+    Q2 -->|otherwise| Q3{SelfReflect}
+    Q3 -->|supported| Q5
+    Q3 -->|unsupported| Q4[Revise]
+    Q4 --> Q5
+    Q5 --> Q6[answer + citations + confidence]
+  end
+
+  subgraph FOLLOWUP_GRAPH
+    F1[ScheduleIntent: parse time] --> F2[Validate<br/>weekday correction]
+  end

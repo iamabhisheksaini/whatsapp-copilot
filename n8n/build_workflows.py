@@ -810,21 +810,56 @@ def build_error_channel():
         node("On Failure", "errorTrigger", {}, [0, 300], tv=TV["errorTrigger"]),
         node("Shape Error", "code", {"jsCode": (
             "const e = $input.first().json;\n"
-            "const ex = e.execution || {};\n"
             "const wf = e.workflow || {};\n"
+            "// n8n sends `execution` for a failure inside a run, but `trigger`\n"
+            "// when the failing node is the trigger itself (a poll that could not\n"
+            "// reach its API). Reading only `execution` produced alerts that said\n"
+            "// 'failed at <blank>: unknown error'.\n"
+            "const ctx = e.execution || e.trigger || {};\n"
+            "const err = ctx.error || e.error || {};\n"
+            "const message = err.message || err.description || err.reason\n"
+            "  || (Object.keys(err).length ? JSON.stringify(err).slice(0, 300) : '')\n"
+            "  || 'unknown error';\n"
+            "const node = ctx.lastNodeExecuted || (err.node && err.node.name) || '';\n"
+            "\n"
+            "// Transient connectivity faults are expected when this host sleeps or\n"
+            "// loses its network; the next poll recovers on its own. They are still\n"
+            "// logged, but they do not warrant waking the operator.\n"
+            "const TRANSIENT = [\n"
+            "  'connection to the server was closed',\n"
+            "  'socket hang up', 'ECONNRESET', 'ETIMEDOUT', 'ENOTFOUND',\n"
+            "  'EAI_AGAIN', 'network socket disconnected', 'getaddrinfo',\n"
+            "];\n"
+            "const lower = String(message).toLowerCase();\n"
+            "const transient = TRANSIENT.some(t => lower.includes(t.toLowerCase()));\n"
+            "\n"
             "return [{ json: {\n"
             "  Timestamp: new Date().toISOString(),\n"
             "  User: 'system',\n"
-            "  Intent: 'error',\n"
+            "  Intent: transient ? 'error_transient' : 'error',\n"
             "  Input: wf.name || 'unknown workflow',\n"
-            "  Output: ex.lastNodeExecuted || '',\n"
-            "  MessageId: 'err-' + (ex.id || Date.now()),\n"
-            "  Error: (ex.error && (ex.error.message || ex.error.description)) || 'unknown error',\n"
-            "  Url: ex.url || '',\n"
+            "  Output: node,\n"
+            "  MessageId: 'err-' + (ctx.id || Date.now()),\n"
+            "  Error: message,\n"
+            "  Url: ctx.url || '',\n"
+            "  transient,\n"
             "} }];"
         )}, [220, 300], tv=TV["code"]),
         sheet_append("Log Error", "SHEET_CONVERSATIONS_ID", "Conversations",
                      [440, 300], matching=["MessageId"]),
+        node("Needs Alert?", "if", {
+            "conditions": {
+                "options": {"caseSensitive": True, "typeValidation": "loose", "version": 2},
+                "conditions": [{
+                    "id": "not-transient",
+                    "leftValue": "={{ $json.transient }}",
+                    "rightValue": "true",
+                    "operator": {"type": "boolean", "operation": "false", "singleValue": True},
+                }],
+                "combinator": "and",
+            },
+            "options": {},
+        }, [660, 300], tv=TV["if"]),
         node("Alert Operator", "httpRequest", {
             "method": "POST",
             "url": "=https://graph.facebook.com/v18.0/{{ $env.WHATSAPP_PHONE_ID }}/messages",
@@ -834,12 +869,17 @@ def build_error_channel():
             "specifyBody": "json",
             "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', "
                         "to: $env.OPERATOR_WHATSAPP_NUMBER, type: 'text', "
-                        "text: { body: '⚠️ ' + $json.Input + ' failed at ' + $json.Output + "
-                        "'\\n' + $json.Error } }) }}",
+                        "text: { body: '⚠️ *' + $json.Input + '*' + "
+                        "($json.Output ? ' failed at _' + $json.Output + '_' : ' failed') + "
+                        "'\\n' + $json.Error + "
+                        "($json.Url ? '\\n' + $json.Url : '') } }) }}",
             "options": {},
-        }, [660, 300], tv=TV["http"], onError="continueRegularOutput"),
+        }, [880, 220], tv=TV["http"], onError="continueRegularOutput"),
     ]
-    connections = chain("On Failure", "Shape Error", "Log Error", "Alert Operator")
+    connections = merge(
+        chain("On Failure", "Shape Error", "Log Error", "Needs Alert?"),
+        fan("Needs Alert?", ["Alert Operator", None]),   # transient faults log only
+    )
     return workflow("Error Channel", nodes, connections)
 
 

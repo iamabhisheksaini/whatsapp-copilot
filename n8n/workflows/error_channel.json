@@ -14,7 +14,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const e = $input.first().json;\nconst ex = e.execution || {};\nconst wf = e.workflow || {};\nreturn [{ json: {\n  Timestamp: new Date().toISOString(),\n  User: 'system',\n  Intent: 'error',\n  Input: wf.name || 'unknown workflow',\n  Output: ex.lastNodeExecuted || '',\n  MessageId: 'err-' + (ex.id || Date.now()),\n  Error: (ex.error && (ex.error.message || ex.error.description)) || 'unknown error',\n  Url: ex.url || '',\n} }];"
+        "jsCode": "const e = $input.first().json;\nconst wf = e.workflow || {};\n// n8n sends `execution` for a failure inside a run, but `trigger`\n// when the failing node is the trigger itself (a poll that could not\n// reach its API). Reading only `execution` produced alerts that said\n// 'failed at <blank>: unknown error'.\nconst ctx = e.execution || e.trigger || {};\nconst err = ctx.error || e.error || {};\nconst message = err.message || err.description || err.reason\n  || (Object.keys(err).length ? JSON.stringify(err).slice(0, 300) : '')\n  || 'unknown error';\nconst node = ctx.lastNodeExecuted || (err.node && err.node.name) || '';\n\n// Transient connectivity faults are expected when this host sleeps or\n// loses its network; the next poll recovers on its own. They are still\n// logged, but they do not warrant waking the operator.\nconst TRANSIENT = [\n  'connection to the server was closed',\n  'socket hang up', 'ECONNRESET', 'ETIMEDOUT', 'ENOTFOUND',\n  'EAI_AGAIN', 'network socket disconnected', 'getaddrinfo',\n];\nconst lower = String(message).toLowerCase();\nconst transient = TRANSIENT.some(t => lower.includes(t.toLowerCase()));\n\nreturn [{ json: {\n  Timestamp: new Date().toISOString(),\n  User: 'system',\n  Intent: transient ? 'error_transient' : 'error',\n  Input: wf.name || 'unknown workflow',\n  Output: node,\n  MessageId: 'err-' + (ctx.id || Date.now()),\n  Error: message,\n  Url: ctx.url || '',\n  transient,\n} }];"
       },
       "id": "66cbfedd-c692-502a-a834-b0bda92dc23c",
       "name": "Shape Error",
@@ -63,13 +63,46 @@
     },
     {
       "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "not-transient",
+              "leftValue": "={{ $json.transient }}",
+              "rightValue": "true",
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "5c2d6701-cd50-594e-acf6-dd5850c800e2",
+      "name": "Needs Alert?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        660,
+        300
+      ]
+    },
+    {
+      "parameters": {
         "method": "POST",
         "url": "=https://graph.facebook.com/v18.0/{{ $env.WHATSAPP_PHONE_ID }}/messages",
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "facebookGraphApi",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', to: $env.OPERATOR_WHATSAPP_NUMBER, type: 'text', text: { body: '⚠️ ' + $json.Input + ' failed at ' + $json.Output + '\\n' + $json.Error } }) }}",
+        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', to: $env.OPERATOR_WHATSAPP_NUMBER, type: 'text', text: { body: '⚠️ *' + $json.Input + '*' + ($json.Output ? ' failed at _' + $json.Output + '_' : ' failed') + '\\n' + $json.Error + ($json.Url ? '\\n' + $json.Url : '') } }) }}",
         "options": {}
       },
       "id": "c651dde4-78cc-58cf-94ef-098a9fcfd36c",
@@ -77,8 +110,8 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        660,
-        300
+        880,
+        220
       ],
       "onError": "continueRegularOutput"
     }
@@ -110,11 +143,23 @@
       "main": [
         [
           {
-            "node": "Alert Operator",
+            "node": "Needs Alert?",
             "type": "main",
             "index": 0
           }
         ]
+      ]
+    },
+    "Needs Alert?": {
+      "main": [
+        [
+          {
+            "node": "Alert Operator",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
       ]
     }
   },

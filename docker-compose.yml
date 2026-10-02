@@ -96,8 +96,22 @@ services:
       - AGENT_A_URL=${AGENT_A_URL:-http://agentA:8001}
       - AGENT_B_URL=${AGENT_B_URL:-http://agentB:8000}
     volumes:
-      - ./n8n_data:/home/node/.n8n
+      # A Docker-managed volume, not a bind mount. n8n keeps its state in
+      # SQLite, and SQLite in WAL mode is unreliable on a macOS bind mount
+      # served through Docker Desktop's virtual filesystem — it produced
+      # intermittent SQLITE_IOERR, losing execution records and at one
+      # point failing a webhook outright. A named volume keeps the database
+      # on the VM's native filesystem.
+      #
+      # Back up with:
+      #   docker run --rm -v whatsapp-copilot_n8n_data:/d -v "$PWD":/b \
+      #     alpine tar -czf /b/n8n_data.tgz -C /d .
+      - n8n_data:/home/node/.n8n
     depends_on:
       - agentA
       - agentB
     restart: unless-stopped
+
+volumes:
+  n8n_data:
+    name: whatsapp-copilot_n8n_data

@@ -20,3 +20,7 @@ infra/.venv/
 
 # OS
 .DS_Store
+
+# n8n state now lives in a Docker volume (see docker-compose.yml);
+# this directory is the pre-migration copy, kept only as a fallback.
+n8n_data.pre-volume/

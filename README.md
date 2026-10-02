@@ -246,6 +246,10 @@ curl -s -X POST localhost:8002/agentB/newlead \
 
 ## Demo script
 
+Full recording script, a blueprint tracing one message through every component,
+and a user manual: [docs/DEMO.md](docs/DEMO.md).
+
+
 1. **"What's our refund policy?"** → grounded answer with citations.
 2. **Send `Refunds_2025.pdf`** → confirms it was added to the knowledge base.
 3. **"And what about digital goods refunds?"** → answers from the new document.
@@ -274,7 +278,8 @@ n8n/
   build_workflows.py
   workflows/        whatsapp_router, drive_watch, nightly_reindex, error_channel
 tests/              99 tests, incl. golden intent tests
-docs/               ARCHITECTURE.md (diagrams), GOOGLE_SETUP.md
+docs/               DEMO.md (recording script, blueprint, user manual)
+                    ARCHITECTURE.md (diagrams), GOOGLE_SETUP.md
                     sequence-diagram.mmd, agentA-graph.mmd, agentB-graph.mmd
 ruff.toml
 data/chroma/        persisted vector store (gitignored)
